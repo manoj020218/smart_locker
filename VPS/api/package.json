@@ -4,6 +4,7 @@
   "private": true,
   "description": "Minimal VPS backend for Smart Cabinet (license, sync, logs, OTA, admin APIs)",
   "type": "module",
+  "packageManager": "pnpm@10.10.0",
   "engines": {
     "node": ">=20"
   },

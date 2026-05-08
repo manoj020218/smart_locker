@@ -45,7 +45,7 @@ VPS/api/
 1. Install dependencies:
 
 ```bash
-npm install
+pnpm install
 ```
 
 2. Create env file:
@@ -57,14 +57,14 @@ cp .env.example .env
 3. Run in dev mode:
 
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 4. Type-check / build:
 
 ```bash
-npm run check
-npm run build
+pnpm run check
+pnpm run build
 ```
 
 ## Environment Variables

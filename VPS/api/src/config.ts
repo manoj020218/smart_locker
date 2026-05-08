@@ -1,6 +1,6 @@
 import { config as loadEnv } from "dotenv";
 
-loadEnv();
+loadEnv({ override: true });
 
 const get = (key: string, fallback?: string): string => {
   const val = process.env[key] ?? fallback;

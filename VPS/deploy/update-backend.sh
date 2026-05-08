@@ -3,6 +3,7 @@ set -e
 
 # Smart Locker - Backend Update Script
 # Uploads VPS/api and deploy config to VPS, then rebuilds and restarts PM2.
+# Uses pnpm on VPS (bootstrapped via corepack when available).
 # Run from project root or anywhere: bash VPS/deploy/update-backend.sh
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -53,7 +54,7 @@ echo "  Archive created: $TAR_FILE"
 echo "[2/4] Uploading archive to VPS..."
 pscp -pw "$VPS_PASS" "$TAR_FILE" "$VPS_USER@$VPS_IP:$VPS_DIR/smart-locker-vps-api.tar.gz"
 
-echo "[3/4] Extracting + installing + building on VPS..."
+echo "[3/4] Extracting + installing + building on VPS (pnpm)..."
 plink -ssh "$VPS_USER@$VPS_IP" -pw "$VPS_PASS" -batch "
 set -e
 mkdir -p $VPS_DIR
@@ -61,8 +62,16 @@ cd $VPS_DIR
 tar -xzf smart-locker-vps-api.tar.gz
 rm -f smart-locker-vps-api.tar.gz
 cd $VPS_DIR/VPS/api
-npm install --omit=dev
-npm run build
+if ! command -v pnpm >/dev/null 2>&1; then
+  if command -v corepack >/dev/null 2>&1; then
+    corepack enable
+    corepack prepare pnpm@latest --activate
+  else
+    npm install -g pnpm
+  fi
+fi
+pnpm install --prod=false
+pnpm run build
 "
 
 echo "[4/4] Restarting PM2..."

@@ -3,10 +3,10 @@ import { z } from "zod";
 import { verifyFirebaseIdToken } from "../../adapters/firebase/firebase_admin.js";
 import { collections } from "../../adapters/mongo/client.js";
 import { cfg } from "../../config.js";
+import { unauthorized } from "../../shared/errors.js";
 import { asyncHandler } from "../../shared/http.js";
 import { signMobileJwt, hashToken } from "../../shared/auth.js";
 import { parseBody } from "../../shared/validation.js";
-import { unauthorized } from "../../shared/errors.js";
 
 const bodySchema = z.object({
   id_token: z.string().min(1).optional(),
@@ -36,7 +36,12 @@ authRoutes.post(
       if (!body.id_token) {
         throw unauthorized("id_token is required");
       }
-      const decoded = await verifyFirebaseIdToken(body.id_token);
+      let decoded;
+      try {
+        decoded = await verifyFirebaseIdToken(body.id_token);
+      } catch {
+        throw unauthorized("Invalid or unverifiable id_token");
+      }
       uid = decoded.uid;
       email = decoded.email ?? "";
       name = decoded.name ?? "";

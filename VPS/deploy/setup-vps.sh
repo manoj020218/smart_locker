@@ -3,6 +3,7 @@ set -e
 
 # Smart Locker - First Time VPS Setup
 # Prereq on VPS: Node.js 20+, npm, PM2, MongoDB available.
+# Uses pnpm on VPS (bootstrapped via corepack when available).
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -51,7 +52,7 @@ tar \
 echo "[2/5] Uploading archive..."
 pscp -pw "$VPS_PASS" "$TAR_FILE" "$VPS_USER@$VPS_IP:$VPS_DIR/smart-locker-vps-api.tar.gz"
 
-echo "[3/5] Extracting and installing on VPS..."
+echo "[3/5] Extracting and installing on VPS (pnpm)..."
 plink -ssh "$VPS_USER@$VPS_IP" -pw "$VPS_PASS" -batch "
 set -e
 mkdir -p $VPS_DIR
@@ -59,8 +60,16 @@ cd $VPS_DIR
 tar -xzf smart-locker-vps-api.tar.gz
 rm -f smart-locker-vps-api.tar.gz
 cd $VPS_DIR/VPS/api
-npm install
-npm run build
+if ! command -v pnpm >/dev/null 2>&1; then
+  if command -v corepack >/dev/null 2>&1; then
+    corepack enable
+    corepack prepare pnpm@latest --activate
+  else
+    npm install -g pnpm
+  fi
+fi
+pnpm install --prod=false
+pnpm run build
 "
 
 echo "[4/5] Starting PM2..."

@@ -3,6 +3,7 @@
 These scripts follow the same workflow style as the `qrunlock` project and target:
 
 - VPS root path: `/root/projects/smart_locker`
+- Backend package manager on VPS: `pnpm` (auto-bootstrapped by scripts)
 
 ## Files
 

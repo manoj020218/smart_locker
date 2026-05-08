@@ -27,6 +27,9 @@ _tmp*/
 *.p12
 *.jks
 *.keystore
+google/
+google-services*.json
+client_secret_*.json
 
 # Node / JS / TS
 node_modules/

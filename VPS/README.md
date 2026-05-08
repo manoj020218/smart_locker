@@ -27,8 +27,8 @@ Implemented endpoints:
 1. Read `VPS/api/README.md`
 2. Copy `.env.example` to `.env`
 3. Run:
-   - `npm install`
-   - `npm run dev`
+   - `pnpm install`
+   - `pnpm run dev`
 
 ## Contracts
 
