@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartLocker by Jenix | Smart Locker, Cabinet Lock &amp; Locker Automation System</title>
+  <meta name="description" content="SmartLocker by Jenix provides smart locker automation, electronic cabinet locks, RS485 control cards, UPI payment locker access, RFID, PIN, face and mobile app based locker systems for locker, vending, battery swapping, gym, office, spa and cabinet manufacturers." />
+  <meta name="keywords" content="smart locker system, smart cabinet lock, locker automation system, RFID locker lock, UPI payment locker, gym locker management system, swimming pool locker system, spa locker system, mobile phone locker cabinet, battery swapping cabinet automation, key cabinet management system, vending machine smart lock, drawer cabinet access control, office mobile locker system, smart locker manufacturer India, IoT locker solution, electronic cabinet lock India, RS485 locker control card, smart locker software, cabinet lock automation" />
+  <meta name="robots" content="index,follow" />
+  <meta name="theme-color" content="#0b1020" />
+  <link rel="canonical" href="https://smartlocker.iotsoft.in" />
+
+  <meta property="og:title" content="SmartLocker by Jenix | Smart Locker, Cabinet Lock &amp; Locker Automation System" />
+  <meta property="og:description" content="SmartLocker by Jenix provides smart locker automation, electronic cabinet locks, RS485 control cards, UPI payment locker access, RFID, PIN, face and mobile app based locker systems." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://smartlocker.iotsoft.in" />
+  <meta property="og:image" content="/og-smartlocker.jpg" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="SmartLocker by Jenix | Smart Locker Automation System" />
+  <meta name="twitter:description" content="Make any locker, drawer, vending or battery swapping cabinet smart with SmartLocker by Jenix." />
+  <meta name="twitter:image" content="/og-smartlocker.jpg" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ["Sora", "ui-sans-serif", "sans-serif"],
+            display: ["Space Grotesk", "Sora", "ui-sans-serif", "sans-serif"]
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    :root {
+      --bg-1: #070b16;
+      --bg-2: #11162a;
+      --glass: rgba(255, 255, 255, 0.06);
+      --glass-border: rgba(255, 255, 255, 0.14);
+      --purple: #9b5cff;
+      --cyan: #21d4fd;
+      --mint: #3ef3c6;
+      --text: #f7f9ff;
+      --muted: #b9c1df;
+      --ok: #22c55e;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 12% 12%, rgba(155, 92, 255, 0.24), transparent 28%),
+        radial-gradient(circle at 86% 10%, rgba(33, 212, 253, 0.18), transparent 32%),
+        radial-gradient(circle at 74% 84%, rgba(62, 243, 198, 0.14), transparent 26%),
+        linear-gradient(160deg, var(--bg-1), var(--bg-2));
+      min-height: 100vh;
+    }
+
+    .gradient-text {
+      background: linear-gradient(90deg, #c8a5ff 0%, #7ce9ff 45%, #7bffd8 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .glass {
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      box-shadow: 0 10px 40px rgba(9, 13, 29, 0.42);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    .hover-lift {
+      transition: transform 240ms ease, box-shadow 240ms ease, border-color 240ms ease;
+    }
+
+    .hover-lift:hover {
+      transform: translateY(-5px);
+      border-color: rgba(124, 233, 255, 0.48);
+      box-shadow: 0 14px 48px rgba(11, 16, 35, 0.55);
+    }
+
+    .live-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--ok);
+      box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.8);
+      animation: pulse 1.9s infinite;
+    }
+
+    @keyframes pulse {
+      0% {
+        box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+      }
+      70% {
+        box-shadow: 0 0 0 14px rgba(34, 197, 94, 0);
+      }
+      100% {
+        box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+      }
+    }
+
+    .blob {
+      position: fixed;
+      border-radius: 999px;
+      filter: blur(38px);
+      opacity: 0.34;
+      z-index: 0;
+      pointer-events: none;
+      animation: drift 14s ease-in-out infinite alternate;
+    }
+
+    .blob-a {
+      width: 280px;
+      height: 280px;
+      left: -80px;
+      top: 120px;
+      background: rgba(155, 92, 255, 0.5);
+    }
+
+    .blob-b {
+      width: 300px;
+      height: 300px;
+      right: -90px;
+      top: 220px;
+      background: rgba(33, 212, 253, 0.42);
+      animation-delay: 2s;
+    }
+
+    .blob-c {
+      width: 260px;
+      height: 260px;
+      right: 18%;
+      bottom: -90px;
+      background: rgba(62, 243, 198, 0.3);
+      animation-delay: 5s;
+    }
+
+    @keyframes drift {
+      from { transform: translate3d(0, 0, 0) scale(1); }
+      to { transform: translate3d(20px, -26px, 0) scale(1.12); }
+    }
+
+    .chip {
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 999px;
+      padding: 0.58rem 0.96rem;
+      color: #dce4ff;
+      font-size: 0.86rem;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+
+    .flow-arrow {
+      color: rgba(164, 183, 233, 0.8);
+      font-weight: 700;
+      font-size: 1.3rem;
+      line-height: 1;
+    }
+
+    .noise::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(rgba(255, 255, 255, 0.06) 0.4px, transparent 0.4px);
+      background-size: 3px 3px;
+      opacity: 0.14;
+      pointer-events: none;
+      border-radius: inherit;
+    }
+  </style>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "Jenix / IOTSoft",
+    "url": "https://smartlocker.iotsoft.in",
+    "brand": "SmartLocker by Jenix",
+    "description": "Smart locker automation system provider for locker, cabinet, vending and battery swapping manufacturers.",
+    "email": "jenixindia@gmail.com"
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": "SmartLocker by Jenix",
+    "category": "Smart Locker Automation System",
+    "brand": {
+      "@type": "Brand",
+      "name": "Jenix"
+    },
+    "audience": {
+      "@type": "Audience",
+      "audienceType": "locker manufacturers, cabinet manufacturers, vending machine manufacturers, project developers"
+    },
+    "description": "Complete smart locker electronics and software stack including electronic locks, control cards, payment integration and mobile apps.",
+    "url": "https://smartlocker.iotsoft.in"
+  }
+  </script>
+</head>
+
+<body class="font-sans antialiased selection:bg-cyan-300/30 selection:text-white">
+  <div class="blob blob-a"></div>
+  <div class="blob blob-b"></div>
+  <div class="blob blob-c"></div>
+
+  <header class="sticky top-0 z-50 border-b border-white/10 bg-slate-950/60 backdrop-blur-xl">
+    <nav class="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8" aria-label="Primary navigation">
+      <a href="#top" class="group inline-flex items-center gap-3">
+        <svg width="40" height="40" viewBox="0 0 64 64" aria-hidden="true">
+          <defs>
+            <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#b084ff"></stop>
+              <stop offset="55%" stop-color="#74e6ff"></stop>
+              <stop offset="100%" stop-color="#7dffd8"></stop>
+            </linearGradient>
+          </defs>
+          <rect x="8" y="10" width="30" height="44" rx="8" fill="none" stroke="url(#g1)" stroke-width="3"></rect>
+          <rect x="15" y="18" width="16" height="12" rx="3" fill="none" stroke="url(#g1)" stroke-width="2.6"></rect>
+          <circle cx="30" cy="38" r="2.3" fill="#7ce9ff"></circle>
+          <path d="M42 12l8 3.4V27c0 8.5-6 14-11.5 16.4C33 41 27 35.5 27 27V15.4L35 12z" fill="none" stroke="url(#g1)" stroke-width="3"></path>
+          <path d="M37 24h4l-2 6h4l-6 10 2-7h-4z" fill="#8af3ff"></path>
+          <circle cx="51.5" cy="14" r="2.1" fill="#9b5cff"></circle>
+          <circle cx="55.2" cy="20.4" r="1.7" fill="#21d4fd"></circle>
+        </svg>
+        <span class="font-display text-lg font-bold tracking-wide text-white">SmartLocker <span class="text-cyan-300">by Jenix</span></span>
+      </a>
+
+      <button id="menuToggle" class="inline-flex items-center rounded-lg border border-white/20 px-3 py-2 text-sm text-white md:hidden" aria-expanded="false" aria-controls="mobileMenu">
+        Menu
+      </button>
+
+      <ul class="hidden items-center gap-7 text-sm text-slate-200 md:flex">
+        <li><a class="hover:text-cyan-300" href="#features">Features</a></li>
+        <li><a class="hover:text-cyan-300" href="#industries">Industries</a></li>
+        <li><a class="hover:text-cyan-300" href="#architecture">Architecture</a></li>
+        <li><a class="hover:text-cyan-300" href="#contact">Contact</a></li>
+        <li><a class="rounded-xl bg-gradient-to-r from-purple-500 to-cyan-400 px-4 py-2 font-semibold text-slate-950 shadow-lg shadow-cyan-500/20" href="#contact">Request Demo</a></li>
+      </ul>
+    </nav>
+
+    <div id="mobileMenu" class="hidden border-t border-white/10 px-4 pb-4 pt-2 md:hidden">
+      <div class="flex flex-col gap-2 text-sm text-slate-200">
+        <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="#features">Features</a>
+        <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="#industries">Industries</a>
+        <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="#architecture">Architecture</a>
+        <a class="rounded-lg px-3 py-2 hover:bg-white/10" href="#contact">Contact</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="top" class="relative z-10">
+    <section class="mx-auto max-w-7xl px-4 pb-14 pt-12 sm:px-6 lg:px-8 lg:pt-20">
+      <div class="grid items-center gap-10 lg:grid-cols-2">
+        <div>
+          <p class="mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-cyan-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">
+            <span class="live-dot"></span> Live Smart Locker Automation Platform
+          </p>
+          <h1 class="font-display text-4xl font-extrabold leading-tight sm:text-5xl lg:text-6xl">
+            Make Any <span class="gradient-text">Locker, Cabinet or Vending Machine</span> Smart
+          </h1>
+          <p class="mt-6 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
+            SmartLocker by Jenix provides complete electronic lock, control card, payment, access control, mobile app and automation software for cabinet manufacturers and project developers.
+          </p>
+          <p class="mt-4 max-w-2xl text-sm text-slate-300 sm:text-base">
+            <span class="font-semibold text-white">Make Any Cabinet Smart.</span>
+            Convert your locker, drawer, vending cabinet or battery swapping cabinet into a smart connected system.
+          </p>
+
+          <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+            <a href="#contact" class="rounded-xl bg-gradient-to-r from-purple-500 via-fuchsia-500 to-cyan-400 px-6 py-3 text-center text-sm font-bold text-slate-950 shadow-xl shadow-purple-500/25">Contact for Integration</a>
+            <a href="#features" class="rounded-xl border border-white/25 bg-white/5 px-6 py-3 text-center text-sm font-semibold text-slate-100 hover:bg-white/10">See Smart Locker Features</a>
+          </div>
+
+          <div class="mt-8 flex flex-wrap items-center gap-2">
+            <span class="chip">OEM / White Label Ready</span>
+            <span class="chip">India + Global B2B</span>
+            <span class="chip">Online / Offline EDGE Mode</span>
+          </div>
+        </div>
+
+        <div class="glass noise relative overflow-hidden rounded-3xl p-5 sm:p-6">
+          <div class="mb-4 flex items-center justify-between">
+            <div>
+              <p class="text-xs uppercase tracking-[0.2em] text-slate-300">SmartLocker Live Control</p>
+              <h2 class="text-lg font-bold text-white">Cabinet Operations Dashboard</h2>
+            </div>
+            <div class="inline-flex items-center gap-2 rounded-full border border-green-300/30 bg-green-300/10 px-3 py-1 text-xs font-semibold text-green-200">
+              <span class="live-dot"></span> LIVE
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-3">
+            <article class="hover-lift rounded-2xl border border-white/15 bg-slate-900/60 p-3">
+              <p class="text-[11px] uppercase tracking-widest text-slate-400">Lockers Online</p>
+              <p id="kpiLockers" class="mt-1 text-2xl font-extrabold text-white">128</p>
+            </article>
+            <article class="hover-lift rounded-2xl border border-white/15 bg-slate-900/60 p-3">
+              <p class="text-[11px] uppercase tracking-widest text-slate-400">Active Users</p>
+              <p id="kpiUsers" class="mt-1 text-2xl font-extrabold text-white">42</p>
+            </article>
+            <article class="hover-lift rounded-2xl border border-white/15 bg-slate-900/60 p-3">
+              <p class="text-[11px] uppercase tracking-widest text-slate-400">UPI Success</p>
+              <p id="kpiUpi" class="mt-1 text-2xl font-extrabold text-white">98.9%</p>
+            </article>
+          </div>
+
+          <ul id="liveFeed" class="mt-4 space-y-2 text-sm text-slate-200" aria-live="polite">
+            <li class="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2"><span class="text-cyan-300">Locker #24</span> opened by card <span class="ml-2 text-xs text-slate-400">just now</span></li>
+            <li class="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2"><span class="text-cyan-300">Locker #18</span> opened by face <span class="ml-2 text-xs text-slate-400">just now</span></li>
+            <li class="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2"><span class="text-cyan-300">Locker #31</span> reserved <span class="ml-2 text-xs text-slate-400">just now</span></li>
+          </ul>
+
+          <div class="mt-4 grid grid-cols-4 gap-2">
+            <span class="h-2 rounded-full bg-green-400"></span>
+            <span class="h-2 rounded-full bg-cyan-400"></span>
+            <span class="h-2 rounded-full bg-purple-400"></span>
+            <span class="h-2 rounded-full bg-emerald-400"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="industries" class="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
+      <div class="mb-8">
+        <p class="text-xs uppercase tracking-[0.2em] text-cyan-200">Who We Serve</p>
+        <h2 class="font-display mt-2 text-3xl font-extrabold sm:text-4xl">Built for Manufacturers and Large Projects</h2>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <article class="glass hover-lift rounded-2xl p-5">Locker Manufacturers</article>
+        <article class="glass hover-lift rounded-2xl p-5">Vending Machine Manufacturers</article>
+        <article class="glass hover-lift rounded-2xl p-5">Battery Swapping Cabinets</article>
+        <article class="glass hover-lift rounded-2xl p-5">Mobile Phone Lockers</article>
+        <article class="glass hover-lift rounded-2xl p-5">Key Cabinets</article>
+        <article class="glass hover-lift rounded-2xl p-5">Gym Lockers</article>
+        <article class="glass hover-lift rounded-2xl p-5">Swimming Pool &amp; Spa Lockers</article>
+        <article class="glass hover-lift rounded-2xl p-5">Office / Factory / Society / School / Hospital Lockers</article>
+      </div>
+    </section>
+
+    <section id="features" class="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
+      <div class="mb-8">
+        <p class="text-xs uppercase tracking-[0.2em] text-cyan-200">What We Provide</p>
+        <h2 class="font-display mt-2 text-3xl font-extrabold sm:text-4xl">Complete Smart Locker Electronics + Software Stack</h2>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <article class="glass hover-lift rounded-2xl p-5">Smart Electronic Cabinet Lock</article>
+        <article class="glass hover-lift rounded-2xl p-5">RS485 / TCP-IP Control Card</article>
+        <article class="glass hover-lift rounded-2xl p-5">Power Supply &amp; Wiring</article>
+        <article class="glass hover-lift rounded-2xl p-5">UPI Payment Integration</article>
+        <article class="glass hover-lift rounded-2xl p-5">RFID Card / PIN / Face / QR Access</article>
+        <article class="glass hover-lift rounded-2xl p-5">Owner/Admin Mobile App + User Access App/PWA</article>
+        <article class="glass hover-lift rounded-2xl p-5">Cloud + Local EDGE Software</article>
+        <article class="glass hover-lift rounded-2xl p-5">Custom Hardware &amp; Software Development</article>
+      </div>
+    </section>
+
+    <section class="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
+      <div class="mb-8">
+        <p class="text-xs uppercase tracking-[0.2em] text-cyan-200">Use Cases</p>
+        <h2 class="font-display mt-2 text-3xl font-extrabold sm:text-4xl">Real-World Locker Automation Scenarios</h2>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <article class="glass hover-lift rounded-2xl p-5">Office mobile deposit lockers with secure employee access.</article>
+        <article class="glass hover-lift rounded-2xl p-5">Gym member lockers with RFID card or app unlock flow.</article>
+        <article class="glass hover-lift rounded-2xl p-5">Swimming pool locker rental with timed usage and payment control.</article>
+        <article class="glass hover-lift rounded-2xl p-5">Spa and wellness locker automation with private PIN access.</article>
+        <article class="glass hover-lift rounded-2xl p-5">Society visitor and parcel lockers with OTP/QR unlock control.</article>
+        <article class="glass hover-lift rounded-2xl p-5">Factory employee mobile and wallet lockers with shift rules.</article>
+        <article class="glass hover-lift rounded-2xl p-5">Battery swapping smart cabinet with status and payment tracking.</article>
+        <article class="glass hover-lift rounded-2xl p-5">Key management cabinet for offices, fleets and campuses.</article>
+        <article class="glass hover-lift rounded-2xl p-5">Paid public lockers via UPI and free member lockers for companies.</article>
+      </div>
+    </section>
+
+    <section class="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
+      <div class="mb-8">
+        <p class="text-xs uppercase tracking-[0.2em] text-cyan-200">Access Methods</p>
+        <h2 class="font-display mt-2 text-3xl font-extrabold sm:text-4xl">Flexible Multi-Access Layer</h2>
+      </div>
+      <div class="flex flex-wrap gap-3">
+        <span class="chip">RFID Card</span>
+        <span class="chip">PIN / Password</span>
+        <span class="chip">Face Recognition</span>
+        <span class="chip">QR Code</span>
+        <span class="chip">Mobile App</span>
+        <span class="chip">UPI Payment</span>
+        <span class="chip">Admin Remote Unlock</span>
+        <span class="chip">API Based Unlock</span>
+      </div>
+    </section>
+
+    <section class="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
+      <div class="grid gap-6 lg:grid-cols-5">
+        <article class="glass hover-lift rounded-3xl p-6 lg:col-span-2">
+          <p class="text-xs uppercase tracking-[0.2em] text-cyan-200">Why Manufacturers Need Us</p>
+          <h2 class="font-display mt-2 text-3xl font-extrabold">You focus on metal fabrication. <span class="gradient-text">We make your cabinet smart.</span></h2>
+          <p class="mt-4 text-slate-300">SmartLocker by Jenix is designed as an electronics + software layer for cabinet and locker manufacturers who want to launch connected products quickly without building a full embedded and cloud team from zero.</p>
+          <p class="mt-3 text-slate-300">We are not a metal cabinet manufacturer. We are a smart locker automation system provider with custom electronics, software, mobile apps and API/SDK integration support.</p>
+        </article>
+        <div class="lg:col-span-3">
+          <div class="grid gap-4 sm:grid-cols-2">
+            <article class="glass hover-lift rounded-2xl p-5">Launch smart product faster</article>
+            <article class="glass hover-lift rounded-2xl p-5">No need to build electronics/software team</article>
+            <article class="glass hover-lift rounded-2xl p-5">Ready control card + app + dashboard</article>
+            <article class="glass hover-lift rounded-2xl p-5">Customizable for your cabinet size</article>
+            <article class="glass hover-lift rounded-2xl p-5">Supports free and paid locker usage</article>
+            <article class="glass hover-lift rounded-2xl p-5">Suitable for India and global market</article>
+            <article class="glass hover-lift rounded-2xl p-5 sm:col-span-2">OEM / White-label programs available</article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="architecture" class="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
+      <div class="mb-8">
+        <p class="text-xs uppercase tracking-[0.2em] text-cyan-200">SmartLocker Architecture</p>
+        <h2 class="font-display mt-2 text-3xl font-extrabold sm:text-4xl">Simple, Scalable, Multi-Locker Ready</h2>
+      </div>
+
+      <div class="glass rounded-3xl p-6">
+        <div class="flex flex-wrap items-center gap-3 text-center">
+          <div class="rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-semibold">User</div>
+          <div class="flow-arrow">→</div>
+          <div class="rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-semibold">Card / PIN / Face / UPI / App</div>
+          <div class="flow-arrow">→</div>
+          <div class="rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-semibold">Control Card</div>
+          <div class="flow-arrow">→</div>
+          <div class="rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-semibold">Cabinet Lock</div>
+          <div class="flow-arrow">→</div>
+          <div class="rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-semibold">Admin Dashboard</div>
+          <div class="flow-arrow">→</div>
+          <div class="rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-semibold">Reports / Alerts</div>
+        </div>
+
+        <div class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div class="rounded-xl border border-cyan-300/25 bg-cyan-300/8 p-4 text-sm text-cyan-100">Local EDGE device support</div>
+          <div class="rounded-xl border border-cyan-300/25 bg-cyan-300/8 p-4 text-sm text-cyan-100">Online / offline mode possible</div>
+          <div class="rounded-xl border border-cyan-300/25 bg-cyan-300/8 p-4 text-sm text-cyan-100">RS485 based multi-locker control</div>
+          <div class="rounded-xl border border-cyan-300/25 bg-cyan-300/8 p-4 text-sm text-cyan-100">Cloud dashboard + API integration</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
+      <div class="glass rounded-3xl p-6 sm:p-8">
+        <p class="text-xs uppercase tracking-[0.2em] text-cyan-200">SEO Focus</p>
+        <h2 class="font-display mt-2 text-3xl font-extrabold sm:text-4xl">Keywords Integrated in Natural B2B Language</h2>
+        <p class="mt-5 text-slate-300">
+          SmartLocker by Jenix is a <strong>smart locker system</strong> and <strong>locker automation system</strong> designed for manufacturers needing a reliable <strong>smart cabinet lock</strong>, <strong>RFID locker lock</strong>, and <strong>RS485 locker control card</strong>. It supports <strong>UPI payment locker</strong> workflows, <strong>drawer cabinet access control</strong>, and <strong>cabinet lock automation</strong> for both paid and free usage models.
+        </p>
+        <p class="mt-4 text-slate-300">
+          We build a complete <strong>IoT locker solution</strong> with <strong>smart locker software</strong> for <strong>gym locker management system</strong>, <strong>swimming pool locker system</strong>, <strong>spa locker system</strong>, <strong>mobile phone locker cabinet</strong>, <strong>battery swapping cabinet automation</strong>, <strong>key cabinet management system</strong>, <strong>vending machine smart lock</strong>, and <strong>office mobile locker system</strong> needs. We are positioned as a <strong>smart locker manufacturer India</strong> and <strong>electronic cabinet lock India</strong> technology provider for global partners.
+        </p>
+      </div>
+    </section>
+
+    <section id="contact" class="mx-auto max-w-7xl px-4 pb-28 pt-14 sm:px-6 lg:px-8">
+      <div class="glass rounded-3xl p-7 sm:p-10">
+        <p class="text-xs uppercase tracking-[0.2em] text-cyan-200">Contact CTA</p>
+        <h2 class="font-display mt-2 text-3xl font-extrabold sm:text-4xl">Ready to make your cabinet smart?</h2>
+        <p class="mt-5 max-w-3xl text-slate-300">
+          Whether you manufacture lockers, vending cabinets, battery swapping cabinets, drawer cabinets, key cabinets or mobile phone lockers, SmartLocker by Jenix can provide the complete smart electronics and software layer.
+        </p>
+        <div class="mt-7 flex flex-col gap-3 sm:flex-row">
+          <a href="https://wa.me/917240226566" class="rounded-xl bg-gradient-to-r from-emerald-400 to-cyan-400 px-6 py-3 text-center text-sm font-bold text-slate-950 shadow-lg shadow-cyan-400/20">WhatsApp Us</a>
+          <a href="mailto:jenixindia@gmail.com?subject=SmartLocker%20Integration%20Demo" class="rounded-xl border border-white/25 bg-white/5 px-6 py-3 text-center text-sm font-semibold text-slate-100 hover:bg-white/10">Request Demo</a>
+          <a href="mailto:jenixindia@gmail.com" class="rounded-xl border border-white/25 bg-white/5 px-6 py-3 text-center text-sm font-semibold text-slate-100 hover:bg-white/10">Email: jenixindia@gmail.com</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="fixed inset-x-0 bottom-0 z-50 border-t border-white/15 bg-slate-950/85 p-3 backdrop-blur-lg md:hidden">
+    <div class="mx-auto grid max-w-7xl grid-cols-2 gap-2">
+      <a href="https://wa.me/917240226566" class="rounded-lg bg-gradient-to-r from-purple-500 to-cyan-400 px-3 py-3 text-center text-sm font-bold text-slate-950">WhatsApp Us</a>
+      <a href="mailto:jenixindia@gmail.com?subject=SmartLocker%20Demo%20Request" class="rounded-lg border border-white/30 bg-white/5 px-3 py-3 text-center text-sm font-semibold text-slate-100">Request Demo</a>
+    </div>
+  </div>
+
+  <footer class="border-t border-white/10 py-8">
+    <div class="mx-auto flex w-full max-w-7xl flex-col items-center justify-between gap-3 px-4 text-center text-sm text-slate-400 sm:px-6 lg:flex-row lg:px-8 lg:text-left">
+      <p>&copy; <span id="year"></span> SmartLocker by Jenix (IOTSoft). All rights reserved.</p>
+      <div class="flex flex-wrap items-center justify-center gap-3 text-xs sm:text-sm">
+        <a class="hover:text-cyan-300" href="/about.html">About</a>
+        <a class="hover:text-cyan-300" href="/privacy-policy.html">Privacy Policy</a>
+        <a class="hover:text-cyan-300" href="/terms-and-conditions.html">Terms &amp; Conditions</a>
+        <a class="hover:text-cyan-300" href="/account-deletion.html">Account Deletion</a>
+        <a class="hover:text-cyan-300" href="/app-support.html">App Support</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    const menuToggle = document.getElementById("menuToggle");
+    const mobileMenu = document.getElementById("mobileMenu");
+    const yearNode = document.getElementById("year");
+    const liveFeed = document.getElementById("liveFeed");
+    const kpiLockers = document.getElementById("kpiLockers");
+    const kpiUsers = document.getElementById("kpiUsers");
+    const kpiUpi = document.getElementById("kpiUpi");
+
+    yearNode.textContent = new Date().getFullYear();
+
+    menuToggle?.addEventListener("click", () => {
+      const isOpen = mobileMenu.classList.toggle("hidden");
+      menuToggle.setAttribute("aria-expanded", String(!isOpen));
+    });
+
+    document.querySelectorAll('a[href^="#"]').forEach((anchor) => {
+      anchor.addEventListener("click", (event) => {
+        const href = anchor.getAttribute("href");
+        if (!href || href === "#") return;
+        const target = document.querySelector(href);
+        if (!target) return;
+        event.preventDefault();
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+        if (!mobileMenu.classList.contains("hidden")) {
+          mobileMenu.classList.add("hidden");
+          menuToggle.setAttribute("aria-expanded", "false");
+        }
+      });
+    });
+
+    const feedItems = [
+      "Locker #24 opened by card",
+      "Locker #18 opened by face",
+      "Locker #31 reserved",
+      "UPI payment success on Locker #08",
+      "Admin remotely unlocked Locker #51",
+      "Locker #12 opened by QR code",
+      "API unlock triggered for Locker #42",
+      "PIN access granted on Locker #03"
+    ];
+
+    function updateFeed() {
+      const item = feedItems[Math.floor(Math.random() * feedItems.length)];
+      const li = document.createElement("li");
+      li.className = "rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2";
+      const now = new Date();
+      const stamp = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      li.innerHTML = "<span class='text-cyan-300'>" + item + "</span><span class='ml-2 text-xs text-slate-400'>" + stamp + "</span>";
+      liveFeed.prepend(li);
+      while (liveFeed.children.length > 6) {
+        liveFeed.removeChild(liveFeed.lastElementChild);
+      }
+    }
+
+    function updateKpis() {
+      const lockerBase = 128;
+      const userBase = 42;
+      const upiBase = 98.9;
+      const lockerValue = lockerBase + Math.floor(Math.random() * 4);
+      const userValue = userBase + Math.floor(Math.random() * 7) - 2;
+      const upiValue = (upiBase + (Math.random() * 0.5 - 0.2)).toFixed(1);
+      kpiLockers.textContent = String(lockerValue);
+      kpiUsers.textContent = String(Math.max(18, userValue));
+      kpiUpi.textContent = upiValue + "%";
+    }
+
+    setInterval(() => {
+      updateFeed();
+      updateKpis();
+    }, 2800);
+  </script>
+</body>
+</html>
