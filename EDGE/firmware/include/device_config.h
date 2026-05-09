@@ -53,3 +53,39 @@
 #ifndef RS485_REPLY_TIMEOUT_MS
 #define RS485_REPLY_TIMEOUT_MS 250
 #endif
+
+#ifndef CABINET_ID_2D
+#define CABINET_ID_2D "01"
+#endif
+
+#ifndef CABINET_NAME
+#define CABINET_NAME "Smart Cabinet"
+#endif
+
+#ifndef CABINET_LOCATION
+#define CABINET_LOCATION "LAN"
+#endif
+
+#ifndef DEFAULT_DRAWER_COUNT
+#define DEFAULT_DRAWER_COUNT 24
+#endif
+
+#ifndef DEFAULT_BOARD_ADDR
+#define DEFAULT_BOARD_ADDR 0
+#endif
+
+#ifndef DEFAULT_OP_METHOD
+#define DEFAULT_OP_METHOD "qr"
+#endif
+
+#ifndef DEFAULT_DRAWER_STRATEGY
+#define DEFAULT_DRAWER_STRATEGY "fixed"
+#endif
+
+#ifndef DEFAULT_FIXED_DRAWER_ID
+#define DEFAULT_FIXED_DRAWER_ID 1
+#endif
+
+#ifndef DEFAULT_IDENTITY_MODE
+#define DEFAULT_IDENTITY_MODE "phone_otp"
+#endif

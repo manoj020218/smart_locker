@@ -21,3 +21,16 @@
 #define RS485_TX_PIN 7
 #define RS485_RX_PIN 6
 #define RS485_DIR_PIN -1
+
+// Cabinet metadata defaults used by LAN PWA transaction protocol and layout.
+#define CABINET_ID_2D "01"
+#define CABINET_NAME "Main Lobby Cabinet"
+#define CABINET_LOCATION "Floor-1"
+#define DEFAULT_DRAWER_COUNT 24
+#define DEFAULT_BOARD_ADDR 0
+
+// Operation mode defaults (can be changed at runtime from LAN PWA and persisted).
+#define DEFAULT_OP_METHOD "qr"
+#define DEFAULT_DRAWER_STRATEGY "fixed"
+#define DEFAULT_FIXED_DRAWER_ID 1
+#define DEFAULT_IDENTITY_MODE "phone_otp"

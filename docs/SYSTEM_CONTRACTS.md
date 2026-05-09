@@ -1,7 +1,7 @@
 ﻿# System Contracts
 
-Last updated: 2026-05-07
-Contract version: 0.1.1
+Last updated: 2026-05-09
+Contract version: 0.1.3
 
 ## 1) Contract Principles
 
@@ -32,6 +32,24 @@ Required per device:
 }
 ```
 
+LAN operator additions:
+
+```json
+{
+  "ops_mode": {
+    "method": "qr|wg_machine|qr_password|admin_emergency",
+    "drawer_strategy": "fixed|random|reuse_last",
+    "fixed_drawer_id": 0
+  },
+  "cabinet_meta": {
+    "cabinet_id_2d": "01",
+    "cabinet_name": "Main Lobby Locker",
+    "cabinet_location": "Floor 1",
+    "drawer_count": 24
+  }
+}
+```
+
 ## 4) EDGE -> VPS Log Event
 
 ```json
@@ -48,6 +66,35 @@ Required per device:
   "trace": {"board": 1, "lock": 0, "cmd": "0x50", "latency_ms": 42}
 }
 ```
+
+## 4A) EDGE Local Transaction Record (LAN PWA)
+
+```json
+{
+  "seq": 101,
+  "ts_epoch": 0,
+  "time_hms": "143022",
+  "cabinet_id_2d": "01",
+  "board": 0,
+  "lock": 5,
+  "action": "open|close",
+  "state_bit": 1,
+  "user_ref": "13-52061",
+  "user_hex_tail": "B",
+  "protocol_code": "01143022B1"
+}
+```
+
+`protocol_code` rule used by LAN export:
+
+1. First 2 chars: cabinet ID (`cabinet_id_2d`)
+2. Next 6 chars: `HHMMSS`
+3. Last 2 chars: user hex tail + state bit (`1=open`, `0=close`)
+
+Retention baseline:
+
+1. Keep last 100 records in EDGE rolling buffer.
+2. Older records require local CSV export from LAN PWA (cloud archival optional).
 
 ## 5) VPS -> EDGE Config Sync
 
@@ -111,6 +158,23 @@ Required per device:
 - `GET /v1/public/apk/version?platform=android`
 - `POST /v1/admin/apk/releases`
 
+## 7A) Minimal EDGE LAN API Surface (PWA)
+
+- `GET /api/health`
+- `GET /api/cabinet/meta`
+- `POST /api/cabinet/meta`
+- `GET /api/ops/mode`
+- `POST /api/ops/mode`
+- `GET /api/wg/latest`
+- `GET /api/wg/recent`
+- `POST /api/rs485/open?board=<0..255>&lock=<0..255>`
+- `GET /api/rs485/lock-status?board=<0..255>`
+- `GET /api/rs485/ir-status?board=<0..255>`
+- `GET /api/rs485/version?board=<0..255>`
+- `GET /api/rs485/scan`
+- `GET /api/tx/recent?limit=100`
+- `GET /api/tx/download.csv?limit=100`
+
 ## 8) Security Baseline
 
 1. TLS everywhere outside BLE/RS485 local buses
@@ -133,3 +197,18 @@ Additive only (non-breaking):
 
 1. Added public APK version endpoint for mobile update checks.
 2. Added admin APK release publish endpoint for version tracking metadata.
+
+### 0.1.1 -> 0.1.2
+
+Additive only (non-breaking):
+
+1. Added LAN PWA transaction record contract and protocol code format.
+2. Added operation mode and cabinet meta model for LAN operator workflows.
+3. Added EDGE LAN transaction retrieval and CSV download endpoints.
+
+### 0.1.2 -> 0.1.3
+
+Additive only (non-breaking):
+
+1. Added explicit cabinet meta and ops mode LAN API endpoints.
+2. Added persistent storage requirement for cabinet meta and ops mode on EDGE NVS.
