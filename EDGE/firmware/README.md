@@ -39,6 +39,11 @@ This firmware is a development build for:
   - error includes locker number(s) already in use by that user
 - Replay-window guard for duplicate Wiegand card bursts
 - Live drawer open/close animation from lock-status polling
+- Background EDGE <-> VPS sync worker (Iteration B baseline):
+  - device self-register (when key missing and provision key is configured)
+  - periodic config pull (`/v1/device/:id/config`) with config-version drift guard
+  - periodic transaction log batch push (`/v1/device/:id/logs/batch`) with retry/backoff
+  - sync status/telemetry endpoint (`/api/sync/status`)
 
 ## Folder Notes
 
@@ -63,6 +68,7 @@ Edit `include/local_config.h` with:
 - Wiegand pins if different
 - RS485 RX/TX and optional DIR pin
 - Cabinet defaults (`CABINET_ID_2D`, cabinet name/location, drawer count)
+- VPS sync defaults (`VPS_BASE_URL`, `VPS_DEVICE_ID`, `VPS_CABINET_ID`, `VPS_TENANT_ID`, `VPS_DEVICE_API_KEY`)
 
 ## 2) Build
 
@@ -114,6 +120,7 @@ Dashboard provides:
 - `GET /manifest.webmanifest`
 - `GET /sw.js`
 - `GET /api/health`
+- `GET /api/sync/status`
 - `GET /api/cabinet/meta`
 - `POST /api/cabinet/meta?cabinet_id=01&name=...&location=...&drawers=24&board=0`
 - `GET /api/ops/mode`

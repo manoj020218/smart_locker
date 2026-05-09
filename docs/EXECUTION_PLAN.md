@@ -139,7 +139,7 @@ A feature is complete only when:
 ## 7) Final Progress Snapshot (Reality Check)
 
 Status date: 2026-05-09
-Assessment source: all repository Markdown files + current implementation files in `EDGE/firmware` and `VPS/api`, plus successful local firmware build (`pio run`, 2026-05-09).
+Assessment source: all repository Markdown files + current implementation files in `EDGE/firmware` and `VPS/api`, plus successful local firmware build (`pio run`, 2026-05-09) including Iteration B sync worker changes.
 
 ### Phase 1 (MVP) Status
 
@@ -176,7 +176,10 @@ Assessment source: all repository Markdown files + current implementation files 
 ### Phase 2 Status
 
 1. Face machine input integration over TCP/IP: `PENDING`
-2. Extended sync diagnostics and field telemetry: `PENDING`
+2. Extended sync diagnostics and field telemetry: `PARTIAL`
+   - EDGE now exposes `/api/sync/status` telemetry.
+   - Background EDGE sync worker (register/config-pull/log-push/retry-backoff) is implemented as baseline.
+   - Field reliability and outage-recovery evidence are still pending.
 
 ### Phase 3 Status
 
@@ -194,10 +197,15 @@ Assessment source: all repository Markdown files + current implementation files 
 5. VPS API baseline for auth, device registration/config sync, logs, license, OTA manifest, and APK version metadata.
 6. Public website and Google Play policy/support pages are present in repo.
 7. Hardware validation docs and RS485 protocol contract are documented.
+8. Iteration B baseline sync loop is implemented on EDGE:
+   - periodic config pull (`/v1/device/:id/config`)
+   - periodic log batch push (`/v1/device/:id/logs/batch`)
+   - config-version regression skip guard
+   - retry/backoff and status telemetry endpoint (`/api/sync/status`)
 
 ### Left
 
-1. Add EDGE <-> VPS sync worker loop with conflict/version handling and retry policy.
+1. Validate EDGE <-> VPS sync behavior with evidence (outage/recovery, drift scenarios, and soak logs).
 2. Build Admin APK (React Native) with BLE onboarding and user/rule/drawer configuration flows.
 3. Add automated tests:
    - EDGE unit tests (CRC/parser/rule decisions)
@@ -219,11 +227,11 @@ Exit criteria:
 1. Offline decision path works without LAN UI/manual API.
 2. Controlled unlock pass-rate test script produces evidence logs (`PENDING`).
 
-### Iteration B - VPS Hardening + Sync Reliability
+### Iteration B - VPS Hardening + Sync Reliability (`IN PROGRESS`)
 
-1. Implement/verify config pull cadence and log batch push from EDGE.
-2. Add conflict/version checks and explicit error telemetry fields.
-3. Complete Mongo cutover (`smart_locker`) and document migration steps.
+1. Implement/verify config pull cadence and log batch push from EDGE. `CODED (evidence test pending)`
+2. Add conflict/version checks and explicit error telemetry fields. `CODED (drift/outage validation pending)`
+3. Complete Mongo cutover (`smart_locker`) and document migration steps. `PENDING`
 
 Exit criteria:
 1. EDGE survives VPS outage and later re-syncs cleanly.

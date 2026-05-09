@@ -1,7 +1,7 @@
 ﻿# System Contracts
 
 Last updated: 2026-05-09
-Contract version: 0.1.4
+Contract version: 0.1.5
 
 ## 1) Contract Principles
 
@@ -32,14 +32,24 @@ Required per device:
 }
 ```
 
+EDGE runtime sync behavior (baseline):
+
+1. Pull config on interval (`EDGE_SYNC_PULL_INTERVAL_SEC`, default `60s`).
+2. Push local access logs in batches (`EDGE_SYNC_LOG_BATCH_SIZE`, default `20`).
+3. Exponential retry backoff between `EDGE_SYNC_RETRY_MIN_SEC` and `EDGE_SYNC_RETRY_MAX_SEC`.
+4. Skip/apply guard: do not apply remote payload when `remote.config_version < local.config_version`.
+
 LAN operator additions:
 
 ```json
 {
   "ops_mode": {
     "method": "qr|wg_machine|qr_password|admin_emergency",
-    "drawer_strategy": "fixed|random|reuse_last",
-    "fixed_drawer_id": 0
+    "drawer_strategy": "sequence|fixed|random|reuse_last",
+    "fixed_drawer_id": 0,
+    "wg_access_mode": "free_card|restricted",
+    "locker_intent": "put|withdraw",
+    "allow_uses_type": 1
   },
   "cabinet_meta": {
     "cabinet_id_2d": "01",
@@ -162,6 +172,7 @@ Retention baseline:
 ## 7A) Minimal EDGE LAN API Surface (PWA)
 
 - `GET /api/health`
+- `GET /api/sync/status`
 - `GET /api/cabinet/meta`
 - `POST /api/cabinet/meta`
 - `GET /api/ops/mode`
@@ -229,3 +240,11 @@ Additive only (non-breaking):
 1. Added EDGE local policy management endpoints (users/rules/drawers/license/sync).
 2. Added `deny` action semantics in local transaction records.
 3. Added `source` field guidance for decision trace visibility in LAN transaction stream.
+
+### 0.1.4 -> 0.1.5
+
+Additive only (non-breaking):
+
+1. Added extended ops-mode fields (`wg_access_mode`, `locker_intent`, `allow_uses_type`) and `sequence` drawer strategy token.
+2. Added EDGE sync runtime status endpoint (`GET /api/sync/status`) for Iteration B telemetry.
+3. Added contract guidance for EDGE background sync cadence (config pull + log batch push with retry/backoff).

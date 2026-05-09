@@ -1,8 +1,11 @@
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include <ESPmDNS.h>
+#include <HTTPClient.h>
 #include <Preferences.h>
 #include <WebServer.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <ctype.h>
 #include <esp_err.h>
 #include <esp_heap_caps.h>
@@ -64,6 +67,32 @@ struct BoardStatusCache {
     uint8_t data[kMaxBoardBytes] = {0};
 };
 
+struct SyncState {
+    bool enabled = false;
+    bool deviceKeyMissing = true;
+    bool registerNeeded = false;
+    bool registerAttempted = false;
+    uint32_t nextRunMs = 0;
+    uint32_t backoffSec = EDGE_SYNC_RETRY_MIN_SEC;
+    uint32_t lastAttemptMs = 0;
+    uint32_t lastPullMs = 0;
+    uint32_t lastPushMs = 0;
+    uint32_t lastSyncTs = 0;
+    uint32_t lastRemoteConfigVersion = 0;
+    uint32_t lastAckSeq = 0;
+    uint32_t driftSkipped = 0;
+    uint16_t lastPushAccepted = 0;
+    uint16_t lastPushDuplicates = 0;
+    char deviceId[40] = {0};
+    char cabinetId[40] = {0};
+    char tenantId[40] = {0};
+    char hwModel[32] = {0};
+    char fwVersion[32] = {0};
+    char baseUrl[128] = {0};
+    char deviceKey[96] = {0};
+    char lastError[96] = "not_configured";
+};
+
 WiegandEvent gRecentEvents[kRecentEventsCap];
 uint8_t gRecentCount = 0;
 uint8_t gRecentHead = 0;
@@ -97,11 +126,15 @@ struct UserDrawerAssignment {
 
 constexpr uint8_t kMaxUserAssignments = 80;
 UserDrawerAssignment gUserAssignments[kMaxUserAssignments];
+SyncState gSyncState;
+WiFiClient gSyncHttpClient;
+WiFiClientSecure gSyncHttpsClient;
 
 constexpr const char* kPrefsNs = "smartcab";
 constexpr const char* kPolicyPrefsNs = "policydb";
 constexpr uint32_t kReplayWindowMs = 1500U;
 constexpr uint32_t kHeapCheckPeriodMs = 2000U;
+constexpr uint32_t kSyncLoopTickMs = 250U;
 
 #ifndef ENABLE_HEAP_GUARD
 #define ENABLE_HEAP_GUARD 1
@@ -823,6 +856,535 @@ void copyStringToBuf(char* out, size_t outLen, const String& in) {
     const size_t take = in.length() < (outLen - 1) ? in.length() : (outLen - 1);
     memcpy(out, in.c_str(), take);
     out[take] = '\0';
+}
+
+bool isBlankCstr(const char* v) {
+    return v == nullptr || v[0] == '\0';
+}
+
+uint32_t syncNowEpochSec() {
+    const time_t now = time(nullptr);
+    if (now > 1700000000) {
+        return static_cast<uint32_t>(now);
+    }
+    return millis() / 1000U;
+}
+
+void syncSetError(const String& error) {
+    copyStringToBuf(gSyncState.lastError, sizeof(gSyncState.lastError), error);
+}
+
+void loadSyncStateFromNvs() {
+    Preferences prefs;
+    if (!prefs.begin(kPrefsNs, false)) {
+        return;
+    }
+    const String storedKey = prefs.getString("sync_key", "");
+    if (!storedKey.isEmpty()) {
+        copyStringToBuf(gSyncState.deviceKey, sizeof(gSyncState.deviceKey), storedKey);
+    }
+    gSyncState.lastAckSeq = prefs.getULong("sync_ack", gSyncState.lastAckSeq);
+    prefs.end();
+}
+
+void saveSyncAckToNvs() {
+    Preferences prefs;
+    if (!prefs.begin(kPrefsNs, false)) {
+        return;
+    }
+    prefs.putULong("sync_ack", gSyncState.lastAckSeq);
+    prefs.end();
+}
+
+void saveSyncDeviceKeyToNvs() {
+    Preferences prefs;
+    if (!prefs.begin(kPrefsNs, false)) {
+        return;
+    }
+    prefs.putString("sync_key", String(gSyncState.deviceKey));
+    prefs.end();
+}
+
+void initSyncStateFromConfig() {
+    copyStringToBuf(gSyncState.baseUrl, sizeof(gSyncState.baseUrl), String(VPS_BASE_URL));
+    copyStringToBuf(gSyncState.deviceId, sizeof(gSyncState.deviceId), String(VPS_DEVICE_ID));
+    copyStringToBuf(gSyncState.cabinetId, sizeof(gSyncState.cabinetId), String(VPS_CABINET_ID));
+    copyStringToBuf(gSyncState.tenantId, sizeof(gSyncState.tenantId), String(VPS_TENANT_ID));
+    copyStringToBuf(gSyncState.hwModel, sizeof(gSyncState.hwModel), String(VPS_HW_MODEL));
+    copyStringToBuf(gSyncState.fwVersion, sizeof(gSyncState.fwVersion), String(VPS_FW_VERSION));
+    copyStringToBuf(gSyncState.deviceKey, sizeof(gSyncState.deviceKey), String(VPS_DEVICE_API_KEY));
+
+    loadSyncStateFromNvs();
+
+    String base = String(gSyncState.baseUrl);
+    base.trim();
+    while (base.endsWith("/")) {
+        base.remove(base.length() - 1);
+    }
+    copyStringToBuf(gSyncState.baseUrl, sizeof(gSyncState.baseUrl), base);
+
+    gSyncState.enabled = !isBlankCstr(gSyncState.baseUrl) && !isBlankCstr(gSyncState.deviceId) && !isBlankCstr(gSyncState.cabinetId) &&
+                         !isBlankCstr(gSyncState.tenantId);
+    gSyncState.deviceKeyMissing = isBlankCstr(gSyncState.deviceKey);
+    gSyncState.registerNeeded = gSyncState.enabled && gSyncState.deviceKeyMissing;
+    gSyncState.backoffSec = EDGE_SYNC_RETRY_MIN_SEC;
+    gSyncState.nextRunMs = millis() + 5000U;
+
+    if (!gSyncState.enabled) {
+        syncSetError("sync_disabled");
+    } else if (gSyncState.registerNeeded) {
+        syncSetError("device_key_missing_register_required");
+    } else {
+        syncSetError("ready");
+    }
+}
+
+String buildVpsUrl(const String& path) {
+    String out = String(gSyncState.baseUrl);
+    if (!path.startsWith("/")) {
+        out += "/";
+    }
+    out += path;
+    return out;
+}
+
+bool syncHttpBegin(HTTPClient& http, const String& url) {
+    if (url.startsWith("https://")) {
+        gSyncHttpsClient.setInsecure();
+        return http.begin(gSyncHttpsClient, url);
+    }
+    return http.begin(gSyncHttpClient, url);
+}
+
+void applySyncBackoff(bool success) {
+    if (success) {
+        gSyncState.backoffSec = EDGE_SYNC_RETRY_MIN_SEC;
+        gSyncState.nextRunMs = millis() + (EDGE_SYNC_PULL_INTERVAL_SEC * 1000UL);
+        return;
+    }
+
+    uint32_t nextBackoff = gSyncState.backoffSec * 2U;
+    if (nextBackoff < EDGE_SYNC_RETRY_MIN_SEC) {
+        nextBackoff = EDGE_SYNC_RETRY_MIN_SEC;
+    }
+    if (nextBackoff > EDGE_SYNC_RETRY_MAX_SEC) {
+        nextBackoff = EDGE_SYNC_RETRY_MAX_SEC;
+    }
+    gSyncState.backoffSec = nextBackoff;
+    gSyncState.nextRunMs = millis() + (gSyncState.backoffSec * 1000UL);
+}
+
+bool findTxEventBySequence(uint32_t sequence, TxEvent& outEvent) {
+    if (gTxCount == 0) {
+        return false;
+    }
+    for (uint16_t i = 0; i < gTxCount; ++i) {
+        const int idx = (static_cast<int>(gTxHead) - static_cast<int>(gTxCount) + static_cast<int>(i) + kTxEventsCap) % kTxEventsCap;
+        const TxEvent& e = gTxEvents[idx];
+        if (e.sequence == sequence) {
+            outEvent = e;
+            return true;
+        }
+    }
+    return false;
+}
+
+uint32_t txOldestSequence() {
+    if (gTxCount == 0) {
+        return 0;
+    }
+    const int idx = (static_cast<int>(gTxHead) - static_cast<int>(gTxCount) + kTxEventsCap) % kTxEventsCap;
+    return gTxEvents[idx].sequence;
+}
+
+uint32_t txNewestSequence() {
+    if (gTxCount == 0) {
+        return 0;
+    }
+    const int idx = (static_cast<int>(gTxHead) - 1 + kTxEventsCap) % kTxEventsCap;
+    return gTxEvents[idx].sequence;
+}
+
+const char* syncChannelFromEvent(const TxEvent& e) {
+    const String source = String(e.source);
+    if (source.startsWith("wg_")) {
+        return "wiegand";
+    }
+    if (source.indexOf("face") >= 0) {
+        return "face";
+    }
+    return "ble_token";
+}
+
+String syncReasonFromEvent(const TxEvent& e) {
+    String source = String(e.source);
+    if (source.startsWith("wg_deny_")) {
+        return source.substring(8);
+    }
+    if (source.startsWith("cmd_deny_")) {
+        return source.substring(9);
+    }
+    if (source.isEmpty()) {
+        return e.stateBit ? String("open") : String("deny");
+    }
+    return source;
+}
+
+bool buildLogBatchPayload(String& payloadOut, uint32_t& firstSeqOut, uint32_t& lastSeqOut, uint16_t& eventCountOut) {
+    payloadOut = "";
+    firstSeqOut = 0;
+    lastSeqOut = 0;
+    eventCountOut = 0;
+
+    if (gTxCount == 0) {
+        return false;
+    }
+
+    const uint32_t oldest = txOldestSequence();
+    const uint32_t newest = txNewestSequence();
+
+    if (oldest == 0 || newest == 0) {
+        return false;
+    }
+
+    if (gSyncState.lastAckSeq > newest) {
+        gSyncState.lastAckSeq = oldest - 1U;
+    }
+
+    if (gSyncState.lastAckSeq + 1U < oldest) {
+        gSyncState.driftSkipped += (oldest - (gSyncState.lastAckSeq + 1U));
+        gSyncState.lastAckSeq = oldest - 1U;
+    }
+
+    if (gSyncState.lastAckSeq >= newest) {
+        return false;
+    }
+
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
+    JsonArray events = root["events"].to<JsonArray>();
+
+    const uint32_t startSeq = gSyncState.lastAckSeq + 1U;
+    uint32_t endSeq = gSyncState.lastAckSeq;
+    for (uint32_t seq = startSeq; seq <= newest && eventCountOut < EDGE_SYNC_LOG_BATCH_SIZE; ++seq) {
+        TxEvent e;
+        if (!findTxEventBySequence(seq, e)) {
+            continue;
+        }
+        JsonObject evt = events.add<JsonObject>();
+        evt["event_id"] = String(gSyncState.deviceId) + "-" + String(e.sequence);
+        evt["device_id"] = String(gSyncState.deviceId);
+        evt["cabinet_id"] = String(gSyncState.cabinetId);
+        evt["ts"] = e.epochSec == 0 ? (syncNowEpochSec()) : e.epochSec;
+        evt["channel"] = syncChannelFromEvent(e);
+        evt["user_ref"] = String(e.userRef);
+        evt["drawer_id"] = static_cast<uint32_t>(e.lockAddr + 1U);
+        evt["result"] = (strcmp(e.action, "deny") == 0 || e.stateBit == 0) ? "deny" : "open";
+        evt["reason"] = syncReasonFromEvent(e);
+
+        JsonObject trace = evt["trace"].to<JsonObject>();
+        trace["board"] = e.board;
+        trace["lock"] = e.lockAddr;
+        trace["state_bit"] = e.stateBit;
+        trace["source"] = String(e.source);
+        trace["protocol_code"] = String(e.protocolCode);
+        trace["captured_ms"] = e.capturedAtMs;
+
+        if (eventCountOut == 0) {
+            firstSeqOut = e.sequence;
+        }
+        endSeq = e.sequence;
+        ++eventCountOut;
+    }
+
+    if (eventCountOut == 0) {
+        return false;
+    }
+
+    lastSeqOut = endSeq;
+    serializeJson(doc, payloadOut);
+    return true;
+}
+
+bool applyConfigFromVpsJson(const String& body, String& errorOut) {
+    errorOut = "";
+    JsonDocument doc;
+    const DeserializationError err = deserializeJson(doc, body);
+    if (err) {
+        errorOut = String("config_json_parse_") + err.c_str();
+        return false;
+    }
+
+    const uint32_t remoteVersion = doc["config_version"] | 0U;
+    if (remoteVersion == 0) {
+        errorOut = "config_missing_version";
+        return false;
+    }
+    gSyncState.lastRemoteConfigVersion = remoteVersion;
+
+    const uint32_t localVersion = gPolicyStore.syncMeta().configVersion;
+    if (remoteVersion < localVersion) {
+        ++gSyncState.driftSkipped;
+        errorOut = "config_version_regression_skipped";
+        return false;
+    }
+
+    const uint32_t nowSec = syncNowEpochSec();
+    const String licenseState = String(static_cast<const char*>(doc["license"]["state"] | "active"));
+    const uint32_t licenseValidTo = doc["license"]["valid_to"] | 0U;
+
+    if (remoteVersion == localVersion) {
+        if (!gPolicyStore.setLicense(licenseState, licenseValidTo) || !gPolicyStore.setSyncMeta(localVersion, nowSec)) {
+            errorOut = "config_meta_update_failed";
+            return false;
+        }
+        gSyncState.lastSyncTs = nowSec;
+        return true;
+    }
+
+    JsonArrayConst drawers = doc["drawers"].as<JsonArray>();
+    JsonArrayConst users = doc["users"].as<JsonArray>();
+    JsonArrayConst rules = doc["rules"].as<JsonArray>();
+
+    if (drawers.size() > LocalPolicyStore::kMaxDrawers || users.size() > LocalPolicyStore::kMaxUsers ||
+        rules.size() > LocalPolicyStore::kMaxRules) {
+        errorOut = "config_capacity_exceeded";
+        return false;
+    }
+
+    if (!gPolicyStore.clearAll()) {
+        errorOut = "config_clear_failed";
+        return false;
+    }
+
+    for (JsonVariantConst v : drawers) {
+        JsonObjectConst d = v.as<JsonObjectConst>();
+        const uint32_t drawerId = d["drawer_id"] | 0U;
+        const uint32_t boardAddr = d["board_address"] | (d["board"] | 0U);
+        const uint32_t lockAddr = d["lock_address"] | (d["lock"] | 0U);
+        if (drawerId == 0 || boardAddr > 255U || lockAddr > 255U) {
+            continue;
+        }
+        if (!gPolicyStore.upsertDrawer(static_cast<uint16_t>(drawerId), static_cast<uint8_t>(boardAddr), static_cast<uint8_t>(lockAddr))) {
+            errorOut = "config_drawer_apply_failed";
+            return false;
+        }
+    }
+
+    for (JsonVariantConst v : users) {
+        JsonObjectConst u = v.as<JsonObjectConst>();
+        const String userId = String(static_cast<const char*>(u["user_id"] | ""));
+        const String cardId = String(static_cast<const char*>(u["card_id"] | ""));
+        const String faceId = String(static_cast<const char*>(u["face_id"] | ""));
+        if (userId.isEmpty()) {
+            continue;
+        }
+        if (!gPolicyStore.upsertUser(userId, cardId, faceId)) {
+            errorOut = "config_user_apply_failed";
+            return false;
+        }
+    }
+
+    for (JsonVariantConst v : rules) {
+        JsonObjectConst r = v.as<JsonObjectConst>();
+        const String ruleId = String(static_cast<const char*>(r["rule_id"] | ""));
+        const String userId = String(static_cast<const char*>(r["user_id"] | ""));
+        const uint32_t drawerId = r["drawer_id"] | 0U;
+        const uint32_t validFrom = r["valid_from"] | 0U;
+        const uint32_t validTo = r["valid_to"] | 0U;
+        const uint32_t cooldownSec = r["cooldown_sec"] | 28800U;
+        const bool paymentRequired = r["payment_required"] | false;
+        if (ruleId.isEmpty() || userId.isEmpty() || drawerId == 0) {
+            continue;
+        }
+        if (!gPolicyStore.upsertRule(ruleId, userId, static_cast<uint16_t>(drawerId), validFrom, validTo, cooldownSec, paymentRequired)) {
+            errorOut = "config_rule_apply_failed";
+            return false;
+        }
+    }
+
+    (void)gPolicyStore.ensureDefaultDrawerMappings(gCabinetMeta.drawerCount, gCabinetMeta.boardAddr);
+    if (!gPolicyStore.setLicense(licenseState, licenseValidTo) || !gPolicyStore.setSyncMeta(remoteVersion, nowSec)) {
+        errorOut = "config_finalize_failed";
+        return false;
+    }
+    gSyncState.lastSyncTs = nowSec;
+    return true;
+}
+
+bool syncRegisterDeviceIfNeeded() {
+    if (!gSyncState.registerNeeded) {
+        return true;
+    }
+
+    gSyncState.registerAttempted = true;
+
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
+    root["device_id"] = String(gSyncState.deviceId);
+    root["cabinet_id"] = String(gSyncState.cabinetId);
+    root["tenant_id"] = String(gSyncState.tenantId);
+    root["hw_model"] = String(gSyncState.hwModel);
+    root["fw_version"] = String(gSyncState.fwVersion);
+    root["rotate_key"] = false;
+    String body;
+    serializeJson(doc, body);
+
+    HTTPClient http;
+    const String url = buildVpsUrl("/v1/device/register");
+    if (!syncHttpBegin(http, url)) {
+        syncSetError("register_begin_failed");
+        return false;
+    }
+    http.setConnectTimeout(EDGE_SYNC_HTTP_TIMEOUT_MS);
+    http.setTimeout(EDGE_SYNC_HTTP_TIMEOUT_MS);
+    http.addHeader("Content-Type", "application/json");
+    if (strlen(VPS_PROVISION_KEY) > 0) {
+        http.addHeader("x-provision-key", String(VPS_PROVISION_KEY));
+    }
+    const int code = http.POST(body);
+    const String response = http.getString();
+    http.end();
+
+    if (code < 200 || code >= 300) {
+        syncSetError(String("register_http_") + String(code));
+        return false;
+    }
+
+    JsonDocument rsp;
+    if (deserializeJson(rsp, response)) {
+        syncSetError("register_parse_failed");
+        return false;
+    }
+    const String apiKey = String(static_cast<const char*>(rsp["api_key"] | ""));
+    if (!apiKey.isEmpty()) {
+        copyStringToBuf(gSyncState.deviceKey, sizeof(gSyncState.deviceKey), apiKey);
+        saveSyncDeviceKeyToNvs();
+    }
+    gSyncState.deviceKeyMissing = isBlankCstr(gSyncState.deviceKey);
+    gSyncState.registerNeeded = gSyncState.deviceKeyMissing;
+    if (gSyncState.registerNeeded) {
+        syncSetError("register_ok_but_missing_key");
+        return false;
+    }
+
+    syncSetError("register_ok");
+    return true;
+}
+
+bool syncPullConfigFromVps() {
+    if (gSyncState.deviceKeyMissing) {
+        syncSetError("pull_missing_device_key");
+        return false;
+    }
+
+    HTTPClient http;
+    const String url = buildVpsUrl(String("/v1/device/") + gSyncState.deviceId + "/config");
+    if (!syncHttpBegin(http, url)) {
+        syncSetError("pull_begin_failed");
+        return false;
+    }
+    http.setConnectTimeout(EDGE_SYNC_HTTP_TIMEOUT_MS);
+    http.setTimeout(EDGE_SYNC_HTTP_TIMEOUT_MS);
+    http.addHeader("x-device-key", String(gSyncState.deviceKey));
+    const int code = http.GET();
+    const String response = http.getString();
+    http.end();
+
+    if (code < 200 || code >= 300) {
+        syncSetError(String("pull_http_") + String(code));
+        return false;
+    }
+
+    String applyError;
+    if (!applyConfigFromVpsJson(response, applyError)) {
+        syncSetError(String("pull_apply_") + applyError);
+        return false;
+    }
+    gSyncState.lastPullMs = millis();
+    syncSetError("pull_ok");
+    return true;
+}
+
+bool syncPushLogsToVps() {
+    if (gSyncState.deviceKeyMissing) {
+        syncSetError("push_missing_device_key");
+        return false;
+    }
+
+    String payload;
+    uint32_t firstSeq = 0;
+    uint32_t lastSeq = 0;
+    uint16_t eventCount = 0;
+    if (!buildLogBatchPayload(payload, firstSeq, lastSeq, eventCount)) {
+        return true;
+    }
+
+    HTTPClient http;
+    const String url = buildVpsUrl(String("/v1/device/") + gSyncState.deviceId + "/logs/batch");
+    if (!syncHttpBegin(http, url)) {
+        syncSetError("push_begin_failed");
+        return false;
+    }
+    http.setConnectTimeout(EDGE_SYNC_HTTP_TIMEOUT_MS);
+    http.setTimeout(EDGE_SYNC_HTTP_TIMEOUT_MS);
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("x-device-key", String(gSyncState.deviceKey));
+
+    const int code = http.POST(payload);
+    const String response = http.getString();
+    http.end();
+
+    if (code < 200 || code >= 300) {
+        syncSetError(String("push_http_") + String(code));
+        return false;
+    }
+
+    JsonDocument rsp;
+    if (deserializeJson(rsp, response)) {
+        syncSetError("push_parse_failed");
+        return false;
+    }
+
+    const uint16_t accepted = static_cast<uint16_t>(rsp["accepted"] | 0U);
+    const uint16_t duplicates = static_cast<uint16_t>(rsp["duplicates"] | 0U);
+    (void)accepted;
+
+    gSyncState.lastAckSeq = lastSeq;
+    gSyncState.lastPushAccepted = accepted;
+    gSyncState.lastPushDuplicates = duplicates;
+    gSyncState.lastPushMs = millis();
+    saveSyncAckToNvs();
+    syncSetError("push_ok");
+    return true;
+}
+
+void runEdgeSyncWorker() {
+    if (!gSyncState.enabled || WiFi.status() != WL_CONNECTED) {
+        return;
+    }
+    if (static_cast<int32_t>(millis() - gSyncState.nextRunMs) < 0) {
+        return;
+    }
+
+    gSyncState.lastAttemptMs = millis();
+
+    bool ok = true;
+    if (!syncRegisterDeviceIfNeeded()) {
+        ok = false;
+    } else {
+        if (!syncPullConfigFromVps()) {
+            ok = false;
+        }
+        if (!syncPushLogsToVps()) {
+            ok = false;
+        }
+    }
+
+    if (ok) {
+        gSyncState.lastSyncTs = syncNowEpochSec();
+    }
+    applySyncBackoff(ok);
 }
 
 bool isValidCabinetId2d(const String& in) {
@@ -1658,9 +2220,41 @@ void handleHealth() {
     j += "\"policy_users\":" + String(gPolicyStore.userCount()) + ",";
     j += "\"policy_rules\":" + String(gPolicyStore.ruleCount()) + ",";
     j += "\"policy_drawers\":" + String(gPolicyStore.drawerCount()) + ",";
+    j += "\"sync_enabled\":" + String(gSyncState.enabled ? "true" : "false") + ",";
+    j += "\"sync_last_error\":\"" + jsonEscape(String(gSyncState.lastError)) + "\",";
+    j += "\"sync_last_ack_seq\":" + String(gSyncState.lastAckSeq) + ",";
+    j += "\"sync_last_remote_config\":" + String(gSyncState.lastRemoteConfigVersion) + ",";
     j += "\"uptime_ms\":" + String(millis()) + ",";
     j += "\"wg_events\":" + String(gRecentCount) + ",";
     j += "\"tx_count\":" + String(gTxCount);
+    j += "}";
+    gServer.send(200, "application/json", j);
+}
+
+void handleSyncStatus() {
+    String j = "{";
+    j += "\"ok\":true,";
+    j += "\"enabled\":" + String(gSyncState.enabled ? "true" : "false") + ",";
+    j += "\"register_needed\":" + String(gSyncState.registerNeeded ? "true" : "false") + ",";
+    j += "\"device_key_missing\":" + String(gSyncState.deviceKeyMissing ? "true" : "false") + ",";
+    j += "\"base_url\":\"" + jsonEscape(String(gSyncState.baseUrl)) + "\",";
+    j += "\"device_id\":\"" + jsonEscape(String(gSyncState.deviceId)) + "\",";
+    j += "\"cabinet_id\":\"" + jsonEscape(String(gSyncState.cabinetId)) + "\",";
+    j += "\"tenant_id\":\"" + jsonEscape(String(gSyncState.tenantId)) + "\",";
+    j += "\"last_error\":\"" + jsonEscape(String(gSyncState.lastError)) + "\",";
+    j += "\"last_attempt_ms\":" + String(gSyncState.lastAttemptMs) + ",";
+    j += "\"last_pull_ms\":" + String(gSyncState.lastPullMs) + ",";
+    j += "\"last_push_ms\":" + String(gSyncState.lastPushMs) + ",";
+    j += "\"last_sync_ts\":" + String(gSyncState.lastSyncTs) + ",";
+    j += "\"last_remote_config_version\":" + String(gSyncState.lastRemoteConfigVersion) + ",";
+    j += "\"last_ack_seq\":" + String(gSyncState.lastAckSeq) + ",";
+    j += "\"last_push_accepted\":" + String(gSyncState.lastPushAccepted) + ",";
+    j += "\"last_push_duplicates\":" + String(gSyncState.lastPushDuplicates) + ",";
+    j += "\"drift_skipped\":" + String(gSyncState.driftSkipped) + ",";
+    j += "\"next_run_ms\":" + String(gSyncState.nextRunMs) + ",";
+    j += "\"backoff_sec\":" + String(gSyncState.backoffSec) + ",";
+    j += "\"local_config_version\":" + String(gPolicyStore.syncMeta().configVersion) + ",";
+    j += "\"local_last_sync_ts\":" + String(gPolicyStore.syncMeta().lastSyncTs);
     j += "}";
     gServer.send(200, "application/json", j);
 }
@@ -2331,6 +2925,7 @@ void setupRoutes() {
     gServer.on("/sw.js", HTTP_GET, handleServiceWorker);
 
     gServer.on("/api/health", HTTP_GET, handleHealth);
+    gServer.on("/api/sync/status", HTTP_GET, handleSyncStatus);
     gServer.on("/api/cabinet/meta", HTTP_GET, handleCabinetMeta);
     gServer.on("/api/cabinet/meta", HTTP_POST, handleCabinetMetaUpdate);
     gServer.on("/api/ops/mode", HTTP_GET, handleOpsMode);
@@ -2405,6 +3000,7 @@ void setup() {
     initCabinetMetaFromConfig();
     initOpsModeFromConfig();
     loadPersistedSettings();
+    initSyncStateFromConfig();
     if (!gPolicyStore.begin(kPolicyPrefsNs)) {
         Serial.println("[POLICY] NVS load failed; using in-memory defaults.");
     }
@@ -2422,14 +3018,28 @@ void setup() {
     connectNetwork();
     setupRoutes();
     logHeapStats("boot_ready");
+    if (gSyncState.enabled) {
+        Serial.printf("[SYNC] enabled base=%s device=%s cabinet=%s tenant=%s\n", gSyncState.baseUrl, gSyncState.deviceId,
+                      gSyncState.cabinetId, gSyncState.tenantId);
+        if (gSyncState.registerNeeded) {
+            Serial.println("[SYNC] device key missing. Register flow will run in background.");
+        }
+    } else {
+        Serial.println("[SYNC] disabled (set VPS_* macros in local_config.h to enable).");
+    }
 
     Serial.println("[READY] Open browser: http://<device-ip>/");
 }
 
 void loop() {
     static uint32_t sLastHeapCheckMs = 0;
+    static uint32_t sLastSyncTickMs = 0;
     WiegandReader::instance().loop();
     gServer.handleClient();
+    if ((millis() - sLastSyncTickMs) >= kSyncLoopTickMs) {
+        sLastSyncTickMs = millis();
+        runEdgeSyncWorker();
+    }
     if ((millis() - sLastHeapCheckMs) >= kHeapCheckPeriodMs) {
         sLastHeapCheckMs = millis();
         if (!heapIntegrityOk("loop_periodic", false)) {

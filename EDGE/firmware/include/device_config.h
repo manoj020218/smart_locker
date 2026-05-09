@@ -101,3 +101,55 @@
 #ifndef DEFAULT_ALLOW_USES_TYPE
 #define DEFAULT_ALLOW_USES_TYPE 1
 #endif
+
+#ifndef VPS_BASE_URL
+#define VPS_BASE_URL ""
+#endif
+
+#ifndef VPS_DEVICE_ID
+#define VPS_DEVICE_ID ""
+#endif
+
+#ifndef VPS_CABINET_ID
+#define VPS_CABINET_ID ""
+#endif
+
+#ifndef VPS_TENANT_ID
+#define VPS_TENANT_ID ""
+#endif
+
+#ifndef VPS_HW_MODEL
+#define VPS_HW_MODEL "esp32-c3"
+#endif
+
+#ifndef VPS_FW_VERSION
+#define VPS_FW_VERSION "edge-dev"
+#endif
+
+#ifndef VPS_DEVICE_API_KEY
+#define VPS_DEVICE_API_KEY ""
+#endif
+
+#ifndef VPS_PROVISION_KEY
+#define VPS_PROVISION_KEY ""
+#endif
+
+#ifndef EDGE_SYNC_PULL_INTERVAL_SEC
+#define EDGE_SYNC_PULL_INTERVAL_SEC 60
+#endif
+
+#ifndef EDGE_SYNC_RETRY_MIN_SEC
+#define EDGE_SYNC_RETRY_MIN_SEC 10
+#endif
+
+#ifndef EDGE_SYNC_RETRY_MAX_SEC
+#define EDGE_SYNC_RETRY_MAX_SEC 300
+#endif
+
+#ifndef EDGE_SYNC_LOG_BATCH_SIZE
+#define EDGE_SYNC_LOG_BATCH_SIZE 20
+#endif
+
+#ifndef EDGE_SYNC_HTTP_TIMEOUT_MS
+#define EDGE_SYNC_HTTP_TIMEOUT_MS 8000
+#endif
