@@ -1,7 +1,7 @@
 ﻿# System Contracts
 
 Last updated: 2026-05-09
-Contract version: 0.1.3
+Contract version: 0.1.4
 
 ## 1) Contract Principles
 
@@ -77,11 +77,12 @@ LAN operator additions:
   "cabinet_id_2d": "01",
   "board": 0,
   "lock": 5,
-  "action": "open|close",
+  "action": "open|close|deny",
   "state_bit": 1,
   "user_ref": "13-52061",
   "user_hex_tail": "B",
-  "protocol_code": "01143022B1"
+  "protocol_code": "01143022B1",
+  "source": "wg_open_rule_ok|wg_deny_unknown_user|feedback_close"
 }
 ```
 
@@ -89,7 +90,7 @@ LAN operator additions:
 
 1. First 2 chars: cabinet ID (`cabinet_id_2d`)
 2. Next 6 chars: `HHMMSS`
-3. Last 2 chars: user hex tail + state bit (`1=open`, `0=close`)
+3. Last 2 chars: user hex tail + state bit (`1=open`, `0=close/deny`)
 
 Retention baseline:
 
@@ -167,6 +168,14 @@ Retention baseline:
 - `POST /api/ops/mode`
 - `GET /api/wg/latest`
 - `GET /api/wg/recent`
+- `GET /api/policy`
+- `POST /api/policy/reset`
+- `POST /api/policy/seed-defaults`
+- `POST /api/policy/license?state=<active|grace|trial|blocked>&valid_to=<epoch_sec>`
+- `POST /api/policy/sync?config_version=<n>&last_sync_ts=<epoch_sec>`
+- `POST /api/policy/users/upsert?user_id=<id>&card_id=<card>&face_id=<optional>`
+- `POST /api/policy/rules/upsert?rule_id=<id>&user_id=<id>&drawer_id=<n>&valid_from=<epoch_sec>&valid_to=<epoch_sec>&cooldown_sec=<n>&payment_required=<0|1>`
+- `POST /api/policy/drawers/upsert?drawer_id=<n>&board=<0..255>&lock=<0..255>`
 - `POST /api/rs485/open?board=<0..255>&lock=<0..255>`
 - `GET /api/rs485/lock-status?board=<0..255>`
 - `GET /api/rs485/ir-status?board=<0..255>`
@@ -212,3 +221,11 @@ Additive only (non-breaking):
 
 1. Added explicit cabinet meta and ops mode LAN API endpoints.
 2. Added persistent storage requirement for cabinet meta and ops mode on EDGE NVS.
+
+### 0.1.3 -> 0.1.4
+
+Additive only (non-breaking):
+
+1. Added EDGE local policy management endpoints (users/rules/drawers/license/sync).
+2. Added `deny` action semantics in local transaction records.
+3. Added `source` field guidance for decision trace visibility in LAN transaction stream.

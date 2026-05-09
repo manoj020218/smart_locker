@@ -79,7 +79,7 @@
 #endif
 
 #ifndef DEFAULT_DRAWER_STRATEGY
-#define DEFAULT_DRAWER_STRATEGY "fixed"
+#define DEFAULT_DRAWER_STRATEGY "sequence"
 #endif
 
 #ifndef DEFAULT_FIXED_DRAWER_ID
@@ -88,4 +88,16 @@
 
 #ifndef DEFAULT_IDENTITY_MODE
 #define DEFAULT_IDENTITY_MODE "phone_otp"
+#endif
+
+#ifndef DEFAULT_WG_ACCESS_MODE
+#define DEFAULT_WG_ACCESS_MODE "free_card"
+#endif
+
+#ifndef DEFAULT_LOCKER_INTENT
+#define DEFAULT_LOCKER_INTENT "put"
+#endif
+
+#ifndef DEFAULT_ALLOW_USES_TYPE
+#define DEFAULT_ALLOW_USES_TYPE 1
 #endif

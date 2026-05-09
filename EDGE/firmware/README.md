@@ -25,6 +25,19 @@ This firmware is a development build for:
 - CSV download for last 100 transactions
 - Cabinet metadata + layout editor in LAN UI
 - Device-side persistence for cabinet metadata and operation mode (NVS)
+- Device-side persistent policy store (users/rules/drawers/license/sync meta in NVS)
+- Wiegand rule-engine decision flow (card -> local policy evaluate -> RS485 open/deny)
+- WG access mode control:
+  - `Free Card` (default): no whitelist required
+  - `Restricted`: whitelist/rule required
+- PUT/WITHDRAW locker flow:
+  - `PUT`: assigns locker to user/card
+  - `WITHDRAW`: opens only previously assigned locker
+  - deny message when no prior PUT assignment
+- Per-user concurrent locker limit (`Allow Uses Type`, default `1`):
+  - blocks PUT when user reached max active lockers
+  - error includes locker number(s) already in use by that user
+- Replay-window guard for duplicate Wiegand card bursts
 - Live drawer open/close animation from lock-status polling
 
 ## Folder Notes
@@ -91,7 +104,7 @@ Dashboard provides:
 3. Last and recent Wiegand reads
 4. RS485 lock open command form
 5. RS485 lock status / IR / version query buttons
-6. Operation mode settings (QR / WG machine / QR+password / emergency)
+6. Operation mode settings (QR / WG machine / QR+password / emergency + free/restricted + put/withdraw + allow uses type)
 7. Last-100 transaction table + CSV export
 8. Layout import/export and live status animation
 
@@ -104,16 +117,52 @@ Dashboard provides:
 - `GET /api/cabinet/meta`
 - `POST /api/cabinet/meta?cabinet_id=01&name=...&location=...&drawers=24&board=0`
 - `GET /api/ops/mode`
-- `POST /api/ops/mode?method=qr&drawer_strategy=fixed&fixed_drawer_id=1&identity_mode=phone_otp`
+- `POST /api/ops/mode?method=wg_machine&drawer_strategy=sequence&fixed_drawer_id=1&identity_mode=phone_otp&wg_access_mode=free_card&locker_intent=put&allow_uses_type=1`
 - `GET /api/wg/latest`
 - `GET /api/wg/recent`
-- `POST /api/rs485/open?board=<0..255>&lock=<0..255>&user=<optional>`
+- `GET /api/policy`
+- `POST /api/policy/reset`
+- `POST /api/policy/seed-defaults`
+- `POST /api/policy/license?state=active&valid_to=0`
+- `POST /api/policy/sync?config_version=2&last_sync_ts=1710000000`
+- `POST /api/policy/users/upsert?user_id=u1&card_id=13-52061`
+- `POST /api/policy/rules/upsert?rule_id=r1&user_id=u1&drawer_id=1&cooldown_sec=30`
+- `POST /api/policy/drawers/upsert?drawer_id=1&board=0&lock=0`
+- `POST /api/rs485/open?board=<0..255>&lock=<0..255>&user=<optional>&intent=put|withdraw&drawer_id=<optional>`
 - `GET /api/rs485/lock-status?board=<0..255>`
 - `GET /api/rs485/ir-status?board=<0..255>`
 - `GET /api/rs485/version?board=<0..255>`
 - `GET /api/rs485/scan` (scan board addresses `0..15`)
 - `GET /api/tx/recent?limit=100`
 - `GET /api/tx/download.csv?limit=100`
+- `GET /api/debug/heap`
+- `POST /api/debug/panic?confirm=YES_CRASH&mode=abort` (debug only)
+- `POST /api/debug/panic?confirm=YES_CRASH&mode=null` (debug only)
+
+## Panic / Heap Debug Workflow
+
+1. Start capture script (captures panic logs and auto-runs `addr2line`):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\EDGE\firmware\tools\capture_panic.ps1 -Port COM12 -DurationSec 30
+```
+
+2. Trigger a controlled panic when needed:
+
+```powershell
+Invoke-WebRequest -Method Post -UseBasicParsing "http://<device-ip>/api/debug/panic?confirm=YES_CRASH&mode=abort"
+```
+
+3. Check heap integrity anytime:
+
+```powershell
+Invoke-WebRequest -UseBasicParsing "http://<device-ip>/api/debug/heap"
+```
+
+Notes:
+
+- This project now runs periodic heap integrity checks and aborts immediately on corruption.
+- The default Arduino framework for ESP32 in PlatformIO uses precompiled ESP-IDF libs, so panic/core-dump destination (`flash` vs `UART` vs `gdbstub`) is not directly switchable from sketch-level code alone.
 
 ## Transaction Protocol Field (LAN Export)
 
@@ -121,7 +170,7 @@ Each transaction record includes `protocol_code` in format:
 
 1. First 2 chars: cabinet ID (`cabinet_id_2d`)
 2. Next 6 chars: `HHMMSS`
-3. Last 2 chars: user HEX tail + state bit (`1=open`, `0=close`)
+3. Last 2 chars: user HEX tail + state bit (`1=open`, `0=close/deny`)
 
 Example: `01143022B1`
 

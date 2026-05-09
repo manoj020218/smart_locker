@@ -1,7 +1,7 @@
 ﻿# Execution Plan
 
 Last updated: 2026-05-09
-Plan version: 1.1
+Plan version: 1.3
 
 ## 1) Phase Plan
 
@@ -135,3 +135,125 @@ A feature is complete only when:
 2. Unit/integration tests pass
 3. Hardware evidence is attached for EDGE changes
 4. Rollback path is documented
+
+## 7) Final Progress Snapshot (Reality Check)
+
+Status date: 2026-05-09
+Assessment source: all repository Markdown files + current implementation files in `EDGE/firmware` and `VPS/api`, plus successful local firmware build (`pio run`, 2026-05-09).
+
+### Phase 1 (MVP) Status
+
+1. Wiegand input -> rule engine -> RS485 unlock: `DONE (baseline code)`
+   - Wiegand decode is implemented.
+   - RS485 driver + lock/status/version commands are implemented.
+   - Local policy store module is implemented for users/rules/drawers/license/sync state (NVS persisted).
+   - Rule engine module is implemented and wired to Wiegand callback for automatic open/deny decisions.
+   - Replay-window guard is implemented for duplicate Wiegand bursts.
+2. Admin mobile app (BLE provisioning + user/rule config): `PENDING`
+   - APK workspace is scaffold-only (`.gitkeep` placeholders).
+3. Minimal VPS (license/config sync/logs/OTA manifest): `DONE (baseline)`
+   - Core API routes are implemented and wired in Express.
+   - Mongo collections and indexes are implemented.
+   - Firebase token verification + secure fallback validation are implemented.
+
+### Phase 1 Acceptance Criteria Status
+
+1. `>=99.5%` successful unlock in controlled test: `PENDING EVIDENCE`
+2. Offline unlock support for `>=72h` without VPS: `PENDING EVIDENCE`
+3. Reboot recovery without local data corruption: `PARTIAL`
+   - Cabinet meta and ops mode persist in NVS.
+   - User/rule/drawer/license/sync local policy data also persists in NVS.
+   - Power-loss recovery evidence test is still pending.
+
+### Phase 1.1 (LAN Operator PWA) Status
+
+1. Installable LAN PWA served by EDGE: `DONE`
+2. Live cabinet layout with open/close animation from RS485 polling: `DONE`
+3. Last 100 transactions + CSV download: `DONE`
+4. Operation mode selection UI (QR/WG/QR+password/admin emergency placeholder): `DONE`
+5. Local-first retention messaging + export workflow: `DONE`
+
+### Phase 2 Status
+
+1. Face machine input integration over TCP/IP: `PENDING`
+2. Extended sync diagnostics and field telemetry: `PENDING`
+
+### Phase 3 Status
+
+1. Guest app login/token BLE flow: `PENDING`
+2. End-to-end automated user journey: `PENDING`
+
+## 8) Done vs Left (Delivery View)
+
+### Done
+
+1. EDGE LAN firmware with live dashboard, RS485 controls, Wiegand read view, transaction ring buffer, and CSV export.
+2. EDGE persistence for cabinet metadata + operation mode using NVS.
+3. EDGE rule engine + local policy store (users/rules/drawers/license/sync) with Wiegand auto decision flow.
+4. Replay-safe decision logging (`open/deny`) with local policy management endpoints on EDGE LAN API.
+5. VPS API baseline for auth, device registration/config sync, logs, license, OTA manifest, and APK version metadata.
+6. Public website and Google Play policy/support pages are present in repo.
+7. Hardware validation docs and RS485 protocol contract are documented.
+
+### Left
+
+1. Add EDGE <-> VPS sync worker loop with conflict/version handling and retry policy.
+2. Build Admin APK (React Native) with BLE onboarding and user/rule/drawer configuration flows.
+3. Add automated tests:
+   - EDGE unit tests (CRC/parser/rule decisions)
+   - VPS route + auth integration tests
+   - End-to-end hardware soak tests and acceptance evidence
+4. Complete MongoDB production cutover and deployment validation on VPS target.
+5. Finalize OTA rollback evidence and release hardening checklist.
+
+## 9) Execution Plan From This Point
+
+### Iteration A - EDGE Core Completion (`COMPLETED: baseline implementation`)
+
+1. Add `rule_engine` module and policy contracts.
+2. Add persistent local store for users/rules/license/config version.
+3. Wire Wiegand callback to policy decision and RS485 unlock call.
+4. Add replay-safe transaction logging for decisions (`open/deny`).
+
+Exit criteria:
+1. Offline decision path works without LAN UI/manual API.
+2. Controlled unlock pass-rate test script produces evidence logs (`PENDING`).
+
+### Iteration B - VPS Hardening + Sync Reliability
+
+1. Implement/verify config pull cadence and log batch push from EDGE.
+2. Add conflict/version checks and explicit error telemetry fields.
+3. Complete Mongo cutover (`smart_locker`) and document migration steps.
+
+Exit criteria:
+1. EDGE survives VPS outage and later re-syncs cleanly.
+2. Config version drift tests pass.
+
+### Iteration C - Admin APK MVP
+
+1. Create RN app shell and auth bootstrap.
+2. Implement BLE scan/connect/provision flow.
+3. Implement user/rule/drawer management screens mapped to VPS APIs.
+4. Add APK release publish/check workflow using existing VPS endpoints.
+
+Exit criteria:
+1. New cabinet can be provisioned from app without manual LAN API use.
+2. Rule changes propagate to EDGE and affect unlock decisions.
+
+### Iteration D - Pilot + Release Evidence
+
+1. Run 72h offline/online mixed soak.
+2. Collect unlock reliability metrics and reboot recovery evidence.
+3. Finalize rollback runbooks and release sign-off package.
+
+Exit criteria:
+1. All Phase 1 acceptance criteria have measured evidence.
+2. Candidate release is ready for pilot rollout.
+
+## 10) Continuation Rule (Single Source of Truth)
+
+1. Treat this file as execution source of truth for future sessions.
+2. After every completed task, update:
+   - section `7) Final Progress Snapshot`
+   - section `8) Done vs Left`
+3. Do not mark any item as `DONE` without code + test/hardware evidence.

@@ -1,7 +1,6 @@
 ﻿#pragma once
 
 #include <Arduino.h>
-#include <functional>
 
 struct WiegandEvent {
     uint32_t sequence = 0;
@@ -14,7 +13,7 @@ struct WiegandEvent {
 
 class WiegandReader {
 public:
-    using EventCallback = std::function<void(const WiegandEvent&)>;
+    using EventCallback = void (*)(const WiegandEvent&);
 
     static WiegandReader& instance();
 
@@ -30,7 +29,7 @@ private:
     bool enqueueEvent(const WiegandEvent& event);
     bool dequeueEvent(WiegandEvent& outEvent);
 
-    EventCallback callback_;
+    EventCallback callback_ = nullptr;
     uint32_t nextSequence_ = 0;
 
     static constexpr uint8_t kEventQueueCapacity = 24;
