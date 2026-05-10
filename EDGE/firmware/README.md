@@ -70,6 +70,11 @@ Edit `include/local_config.h` with:
 - Cabinet defaults (`CABINET_ID_2D`, cabinet name/location, drawer count)
 - VPS sync defaults (`VPS_BASE_URL`, `VPS_DEVICE_ID`, `VPS_CABINET_ID`, `VPS_TENANT_ID`, `VPS_DEVICE_API_KEY`)
 
+Recommended:
+
+1. Keep `VPS_BASE_URL` as stable domain (`https://smartlocker.iotsoft.in`).
+2. Move/scale VPS behind DNS or reverse proxy so firmware stays unchanged.
+
 ## 2) Build
 
 ```powershell

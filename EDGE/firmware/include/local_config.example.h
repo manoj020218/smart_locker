@@ -39,8 +39,9 @@
 #define DEFAULT_ALLOW_USES_TYPE 1
 
 // VPS sync (Iteration B)
-// Keep BASE_URL empty to disable EDGE<->VPS background sync.
-#define VPS_BASE_URL ""
+// Keep this as stable public domain; move backend behind DNS/proxy without reflashing devices.
+// Set empty string only if you intentionally want to disable EDGE<->VPS sync.
+#define VPS_BASE_URL "https://smartlocker.iotsoft.in"
 #define VPS_DEVICE_ID ""
 #define VPS_CABINET_ID ""
 #define VPS_TENANT_ID ""

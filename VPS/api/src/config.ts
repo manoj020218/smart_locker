@@ -15,6 +15,14 @@ const parseBool = (value: string | undefined, fallback: boolean): boolean => {
   return value.toLowerCase() === "true";
 };
 
+const parseCsv = (value: string | undefined): string[] => {
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((v) => v.trim())
+    .filter((v) => v.length > 0);
+};
+
 export const cfg = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   port: Number(process.env.PORT ?? 8080),
@@ -24,6 +32,8 @@ export const cfg = {
 
   jwtSecret: get("JWT_SECRET", "dev-only-change-me"),
   deviceProvisionKey: process.env.DEVICE_PROVISION_KEY ?? "",
+  requireDeviceProvisionKey: parseBool(process.env.REQUIRE_DEVICE_PROVISION_KEY, true),
+  deviceRegistrationAllowlist: parseCsv(process.env.DEVICE_REGISTRATION_ALLOWLIST),
 
   allowInsecureAuthBypass: parseBool(process.env.ALLOW_INSECURE_AUTH_BYPASS, false),
   allowInsecureDeviceKeyBypass: parseBool(process.env.ALLOW_INSECURE_DEVICE_KEY_BYPASS, false),

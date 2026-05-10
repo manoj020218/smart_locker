@@ -26,7 +26,14 @@ syncRoutes.post(
   asyncHandler(async (req, res) => {
     const body = parseBody(registerSchema, req.body);
 
-    if (cfg.deviceProvisionKey && !cfg.allowInsecureDeviceKeyBypass) {
+    if (cfg.deviceRegistrationAllowlist.length > 0 && !cfg.deviceRegistrationAllowlist.includes(body.device_id)) {
+      throw forbidden("Device is not allowlisted for registration");
+    }
+
+    if (cfg.requireDeviceProvisionKey && !cfg.allowInsecureDeviceKeyBypass) {
+      if (!cfg.deviceProvisionKey) {
+        throw forbidden("Device registration is locked: server provision key is not configured");
+      }
       const given = req.header("x-provision-key") ?? "";
       if (!given || given !== cfg.deviceProvisionKey) {
         throw forbidden("Invalid or missing x-provision-key");
@@ -34,7 +41,16 @@ syncRoutes.post(
     }
 
     const c = collections();
-    const existing = await c.devices.findOne<{ api_key_hash?: string }>({ device_id: body.device_id });
+    const existing = await c.devices.findOne<{ api_key_hash?: string; cabinet_id?: string; tenant_id?: string }>({
+      device_id: body.device_id
+    });
+
+    if (
+      existing &&
+      ((existing.cabinet_id && existing.cabinet_id !== body.cabinet_id) || (existing.tenant_id && existing.tenant_id !== body.tenant_id))
+    ) {
+      throw forbidden("Device identity mismatch for cabinet or tenant");
+    }
 
     let apiKey: string | null = null;
     if (!existing?.api_key_hash || body.rotate_key) {

@@ -93,7 +93,9 @@ Required:
 
 Optional:
 
-- `DEVICE_PROVISION_KEY` (required header on first device provisioning)
+- `DEVICE_PROVISION_KEY` (server-side registration secret)
+- `REQUIRE_DEVICE_PROVISION_KEY` (default `true`; keep `true` in production)
+- `DEVICE_REGISTRATION_ALLOWLIST` (optional comma-separated `device_id` allowlist)
 - `ALLOW_INSECURE_AUTH_BYPASS` (`true` only in local dev)
 - `ALLOW_INSECURE_DEVICE_KEY_BYPASS` (`true` only in local dev)
 - Firebase credentials (`GOOGLE_APPLICATION_CREDENTIALS` or inline env vars)
@@ -162,6 +164,7 @@ Register device:
 ```bash
 curl -X POST http://localhost:8080/v1/device/register \
   -H "Content-Type: application/json" \
+  -H "x-provision-key: <DEVICE_PROVISION_KEY>" \
   -d '{
     "device_id":"dev-001",
     "cabinet_id":"cab-001",

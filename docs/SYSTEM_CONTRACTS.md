@@ -1,7 +1,7 @@
 ﻿# System Contracts
 
-Last updated: 2026-05-09
-Contract version: 0.1.5
+Last updated: 2026-05-10
+Contract version: 0.1.6
 
 ## 1) Contract Principles
 
@@ -202,6 +202,9 @@ Retention baseline:
 3. Firebase Google ID token verification on VPS
 4. Device API key or signed JWT per device
 5. Replay protection for Guest token channel
+6. Device registration hard-gate:
+   - `x-provision-key` required in production
+   - optional server-side `device_id` allowlist enforcement
 
 ## 9) Versioning Policy
 
@@ -248,3 +251,10 @@ Additive only (non-breaking):
 1. Added extended ops-mode fields (`wg_access_mode`, `locker_intent`, `allow_uses_type`) and `sequence` drawer strategy token.
 2. Added EDGE sync runtime status endpoint (`GET /api/sync/status`) for Iteration B telemetry.
 3. Added contract guidance for EDGE background sync cadence (config pull + log batch push with retry/backoff).
+
+### 0.1.5 -> 0.1.6
+
+Additive only (non-breaking):
+
+1. Added explicit device-registration hard-gate guidance (`x-provision-key`, optional allowlist).
+2. Formalized security note for stable domain-based EDGE sync routing (backend can move behind DNS/proxy without firmware contract changes).

@@ -103,7 +103,7 @@
 #endif
 
 #ifndef VPS_BASE_URL
-#define VPS_BASE_URL ""
+#define VPS_BASE_URL "https://smartlocker.iotsoft.in"
 #endif
 
 #ifndef VPS_DEVICE_ID

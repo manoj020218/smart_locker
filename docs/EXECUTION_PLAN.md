@@ -138,7 +138,7 @@ A feature is complete only when:
 
 ## 7) Final Progress Snapshot (Reality Check)
 
-Status date: 2026-05-09
+Status date: 2026-05-10
 Assessment source: all repository Markdown files + current implementation files in `EDGE/firmware` and `VPS/api`, plus successful local firmware build (`pio run`, 2026-05-09) including Iteration B sync worker changes.
 
 ### Phase 1 (MVP) Status
@@ -202,6 +202,11 @@ Assessment source: all repository Markdown files + current implementation files 
    - periodic log batch push (`/v1/device/:id/logs/batch`)
    - config-version regression skip guard
    - retry/backoff and status telemetry endpoint (`/api/sync/status`)
+9. Stable domain sync routing baseline is set (`https://smartlocker.iotsoft.in`) so VPS host migration can be handled by DNS/proxy without firmware endpoint contract changes.
+10. VPS device-registration hardening is added:
+   - provision-key gate can be enforced by default
+   - optional device-id allowlist
+   - device identity mismatch checks (cabinet/tenant) during register
 
 ### Left
 
