@@ -32,4 +32,4 @@ Implemented endpoints:
 
 ## Contracts
 
-All payloads align with `../docs/SYSTEM_CONTRACTS.md` (contract baseline `0.1.0`).
+All payloads align with `../docs/SYSTEM_CONTRACTS.md` (contract baseline `0.1.5`).

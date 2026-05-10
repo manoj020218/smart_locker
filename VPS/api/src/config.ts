@@ -20,7 +20,7 @@ export const cfg = {
   port: Number(process.env.PORT ?? 8080),
 
   mongodbUri: get("MONGODB_URI", "mongodb://127.0.0.1:27017"),
-  mongodbDbName: get("MONGODB_DB_NAME", "smart_cabinet"),
+  mongodbDbName: get("MONGODB_DB_NAME", "smart_locker"),
 
   jwtSecret: get("JWT_SECRET", "dev-only-change-me"),
   deviceProvisionKey: process.env.DEVICE_PROVISION_KEY ?? "",

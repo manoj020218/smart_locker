@@ -171,6 +171,18 @@ Notes:
 - This project now runs periodic heap integrity checks and aborts immediately on corruption.
 - The default Arduino framework for ESP32 in PlatformIO uses precompiled ESP-IDF libs, so panic/core-dump destination (`flash` vs `UART` vs `gdbstub`) is not directly switchable from sketch-level code alone.
 
+## Sync Evidence Capture (Iteration B)
+
+Capture sync telemetry for outage/recovery or drift verification:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\EDGE\firmware\tools\sync_evidence.ps1 -DeviceBaseUrl "http://192.168.1.80" -DurationSec 300 -IntervalSec 5 -OutCsv .\EDGE\firmware\sync_evidence.csv
+```
+
+Live sync telemetry endpoint:
+
+- `GET /api/sync/status`
+
 ## Transaction Protocol Field (LAN Export)
 
 Each transaction record includes `protocol_code` in format:

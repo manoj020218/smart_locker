@@ -11,7 +11,7 @@ Minimal backend for Smart Cabinet Phase 1:
 7. admin config APIs
 8. APK version tracking APIs
 
-This implementation follows `docs/SYSTEM_CONTRACTS.md` (`0.1.0`).
+This implementation follows `docs/SYSTEM_CONTRACTS.md` (`0.1.5`).
 
 ## Stack
 
@@ -66,6 +66,22 @@ pnpm run dev
 pnpm run check
 pnpm run build
 ```
+
+5. Mongo cutover dry-run / apply:
+
+```bash
+pnpm run mongo:cutover
+pnpm run mongo:cutover -- --apply
+```
+
+Optional flags:
+
+- `--drop-target-first` (dangerous, wipes target DB before copy)
+
+Optional env overrides:
+
+- `MONGO_SOURCE_DB` (default `smart_cabinet`)
+- `MONGO_TARGET_DB` (default `smart_locker`)
 
 ## Environment Variables
 
@@ -137,6 +153,7 @@ Indexes are auto-created on startup (`src/adapters/mongo/indexes.ts`).
 2. `config_version` increments when admin updates users/rules/drawer maps.
 3. Logs endpoint accepts batches with duplicate-safe handling on `event_id`.
 4. OTA endpoint returns the active channel manifest when newer and eligible.
+5. Default DB name has been moved to `smart_locker`; use the cutover script for existing `smart_cabinet` data.
 
 ## Minimal cURL Flow
 

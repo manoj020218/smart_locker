@@ -211,7 +211,7 @@ Assessment source: all repository Markdown files + current implementation files 
    - EDGE unit tests (CRC/parser/rule decisions)
    - VPS route + auth integration tests
    - End-to-end hardware soak tests and acceptance evidence
-4. Complete MongoDB production cutover and deployment validation on VPS target.
+4. Execute MongoDB production cutover and deployment validation on VPS target (script/docs are now prepared).
 5. Finalize OTA rollback evidence and release hardening checklist.
 
 ## 9) Execution Plan From This Point
@@ -231,7 +231,7 @@ Exit criteria:
 
 1. Implement/verify config pull cadence and log batch push from EDGE. `CODED (evidence test pending)`
 2. Add conflict/version checks and explicit error telemetry fields. `CODED (drift/outage validation pending)`
-3. Complete Mongo cutover (`smart_locker`) and document migration steps. `PENDING`
+3. Complete Mongo cutover (`smart_locker`) and document migration steps. `DOCS+SCRIPT READY, PROD EXECUTION PENDING`
 
 Exit criteria:
 1. EDGE survives VPS outage and later re-syncs cleanly.
