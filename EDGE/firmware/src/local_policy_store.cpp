@@ -135,21 +135,22 @@ bool LocalPolicyStore::load() {
     const size_t expected = sizeof(PersistedState);
     const size_t len = prefs.getBytesLength("blob");
     if (len != expected) {
+        prefs.remove("blob");
         prefs.end();
         resetStateToDefaults();
-        return true;
+        return save();
     }
 
     const size_t readLen = prefs.getBytes("blob", &state_, expected);
     prefs.end();
     if (readLen != expected) {
         resetStateToDefaults();
-        return false;
+        return save();
     }
 
     if (state_.schemaVersion != 1) {
         resetStateToDefaults();
-        return true;
+        return save();
     }
 
     if (state_.userCount > kMaxUsers) {
@@ -177,9 +178,14 @@ bool LocalPolicyStore::save() const {
     if (!prefs.begin(nvsNamespace_, false)) {
         return false;
     }
-    const size_t written = prefs.putBytes("blob", &state_, sizeof(PersistedState));
+    const size_t expected = sizeof(PersistedState);
+    size_t written = prefs.putBytes("blob", &state_, expected);
+    if (written != expected) {
+        prefs.remove("blob");
+        written = prefs.putBytes("blob", &state_, expected);
+    }
     prefs.end();
-    return written == sizeof(PersistedState);
+    return written == expected;
 }
 
 bool LocalPolicyStore::clearAll() {

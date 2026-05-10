@@ -39,9 +39,10 @@ struct LocalSyncMeta {
 
 class LocalPolicyStore {
 public:
-    static constexpr uint8_t kMaxUsers = 40;
-    static constexpr uint8_t kMaxRules = 80;
-    static constexpr uint8_t kMaxDrawers = 72;
+    // Sized to keep NVS blob updates reliable on ESP32-C3 default NVS partition.
+    static constexpr uint8_t kMaxUsers = 16;
+    static constexpr uint8_t kMaxRules = 24;
+    static constexpr uint8_t kMaxDrawers = 48;
 
     bool begin(const char* nvsNamespace);
     bool load();

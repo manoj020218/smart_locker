@@ -1,7 +1,7 @@
 ﻿# Execution Plan
 
-Last updated: 2026-05-09
-Plan version: 1.3
+Last updated: 2026-05-10
+Plan version: 1.4
 
 ## 1) Phase Plan
 
@@ -139,7 +139,7 @@ A feature is complete only when:
 ## 7) Final Progress Snapshot (Reality Check)
 
 Status date: 2026-05-10
-Assessment source: all repository Markdown files + current implementation files in `EDGE/firmware` and `VPS/api`, plus successful local firmware build (`pio run`, 2026-05-09) including Iteration B sync worker changes.
+Assessment source: all repository Markdown files + current implementation files in `EDGE/firmware` and `VPS/api`, plus successful local firmware build/flash and LAN API validation (`pio run` + `upload` + endpoint checks, 2026-05-10) including Iteration B sync worker reliability fixes.
 
 ### Phase 1 (MVP) Status
 
@@ -179,6 +179,8 @@ Assessment source: all repository Markdown files + current implementation files 
 2. Extended sync diagnostics and field telemetry: `PARTIAL`
    - EDGE now exposes `/api/sync/status` telemetry.
    - Background EDGE sync worker (register/config-pull/log-push/retry-backoff) is implemented as baseline.
+   - Register-recovery path now rotates key when local device key is missing, and LAN PWA now shows live VPS connection status.
+   - Local policy persistence now includes self-healing for incompatible/stale blobs and save-retry behavior.
    - Field reliability and outage-recovery evidence are still pending.
 
 ### Phase 3 Status
@@ -207,10 +209,19 @@ Assessment source: all repository Markdown files + current implementation files 
    - provision-key gate can be enforced by default
    - optional device-id allowlist
    - device identity mismatch checks (cabinet/tenant) during register
+11. EDGE sync registration recovery is hardened:
+   - when local key is missing, register request now asks key rotation to avoid permanent `register_ok_but_missing_key` loops
+   - firmware accepts either `api_key` or `device_key` response field for compatibility
+12. EDGE policy-store persistence reliability is improved:
+   - incompatible/stale policy blobs are removed and default compact blob is re-saved
+   - save path retries once after blob removal when first write fails
+13. LAN operator dashboard now includes explicit VPS connectivity panel:
+   - status badge (`Connected`, `Needs Registration`, `Disabled`, `Disconnected`)
+   - base URL, device ID, and last sync error visible from `http://<device-ip>/`
 
 ### Left
 
-1. Validate EDGE <-> VPS sync behavior with evidence (outage/recovery, drift scenarios, and soak logs).
+1. Complete EDGE <-> VPS sync evidence pack (outage/recovery, drift scenarios, log push with real transactions, and soak logs).
 2. Build Admin APK (React Native) with BLE onboarding and user/rule/drawer configuration flows.
 3. Add automated tests:
    - EDGE unit tests (CRC/parser/rule decisions)
@@ -235,7 +246,7 @@ Exit criteria:
 ### Iteration B - VPS Hardening + Sync Reliability (`IN PROGRESS`)
 
 1. Implement/verify config pull cadence and log batch push from EDGE. `CODED (evidence test pending)`
-2. Add conflict/version checks and explicit error telemetry fields. `CODED (drift/outage validation pending)`
+2. Add conflict/version checks and explicit error telemetry fields. `CODED + LAN SMOKE VERIFIED (drift/outage validation pending)`
 3. Complete Mongo cutover (`smart_locker`) and document migration steps. `DOCS+SCRIPT READY, PROD EXECUTION PENDING`
 
 Exit criteria:

@@ -302,6 +302,7 @@ const char kIndexHtml[] PROGMEM = R"HTML(
     <section class="card">
       <h3>Device Health</h3>
       <div id="health">Loading...</div>
+      <div id="vpsStatus" class="mono" style="margin-top:8px;">Checking VPS link...</div>
       <div class="row">
         <button onclick="refreshHealth()">Refresh</button>
         <a class="mono" id="csvLink" href="/api/tx/download.csv?limit=100" target="_blank">Download Last 100 CSV</a>
@@ -690,6 +691,34 @@ async function refreshHealth() {
     "<div><b>Uptime ms:</b> <span class='mono'>" + (d.uptime_ms || 0) + "</span></div>";
 }
 
+async function refreshVpsStatus() {
+  const d = await api("/api/sync/status");
+  if (!d || !d.ok) {
+    const msg = d && (d.message || d.error || d.raw) ? (d.message || d.error || d.raw) : "fetch_failed";
+    document.getElementById("vpsStatus").innerHTML =
+      "<div><b>VPS:</b> <span class='pill pill-bad'>Unavailable</span></div>" +
+      "<div class='mono'>/api/sync/status failed: " + String(msg) + "</div>";
+    return;
+  }
+
+  let label = "Disconnected";
+  let cls = "pill-bad";
+  if (!d.enabled) {
+    label = "Disabled";
+  } else if (d.register_needed || d.device_key_missing) {
+    label = "Needs Registration";
+  } else if ((Number(d.last_pull_ms || 0) > 0) || (Number(d.last_push_ms || 0) > 0) || String(d.last_error || "").includes("_ok")) {
+    label = "Connected";
+    cls = "pill-ok";
+  }
+
+  document.getElementById("vpsStatus").innerHTML =
+    "<div><b>VPS:</b> <span class='pill " + cls + "'>" + label + "</span></div>" +
+    "<div><b>Base URL:</b> <span class='mono'>" + String(d.base_url || "-") + "</span></div>" +
+    "<div><b>Device ID:</b> <span class='mono'>" + String(d.device_id || "-") + "</span></div>" +
+    "<div><b>Last Error:</b> <span class='mono'>" + String(d.last_error || "-") + "</span></div>";
+}
+
 async function refreshWg() {
   const latest = await api("/api/wg/latest");
   const recent = await api("/api/wg/recent");
@@ -807,12 +836,14 @@ async function bootstrap() {
   await loadOps();
   applyChannelMode();
   refreshHealth();
+  refreshVpsStatus();
   refreshWg();
   refreshTx();
   queryStatus();
 }
 
 setInterval(refreshHealth, 5000);
+setInterval(refreshVpsStatus, 5000);
 setInterval(refreshWg, 1500);
 setInterval(queryStatus, 3000);
 setInterval(refreshTx, 5000);
@@ -1226,7 +1257,9 @@ bool syncRegisterDeviceIfNeeded() {
     root["tenant_id"] = String(gSyncState.tenantId);
     root["hw_model"] = String(gSyncState.hwModel);
     root["fw_version"] = String(gSyncState.fwVersion);
-    root["rotate_key"] = false;
+    // Recover from NVS loss by explicitly rotating key when EDGE has no local key.
+    const bool requestRotateKey = isBlankCstr(gSyncState.deviceKey);
+    root["rotate_key"] = requestRotateKey;
     String body;
     serializeJson(doc, body);
 
@@ -1256,7 +1289,10 @@ bool syncRegisterDeviceIfNeeded() {
         syncSetError("register_parse_failed");
         return false;
     }
-    const String apiKey = String(static_cast<const char*>(rsp["api_key"] | ""));
+    String apiKey = String(static_cast<const char*>(rsp["api_key"] | ""));
+    if (apiKey.isEmpty()) {
+        apiKey = String(static_cast<const char*>(rsp["device_key"] | ""));
+    }
     if (!apiKey.isEmpty()) {
         copyStringToBuf(gSyncState.deviceKey, sizeof(gSyncState.deviceKey), apiKey);
         saveSyncDeviceKeyToNvs();
@@ -1264,7 +1300,7 @@ bool syncRegisterDeviceIfNeeded() {
     gSyncState.deviceKeyMissing = isBlankCstr(gSyncState.deviceKey);
     gSyncState.registerNeeded = gSyncState.deviceKeyMissing;
     if (gSyncState.registerNeeded) {
-        syncSetError("register_ok_but_missing_key");
+        syncSetError(requestRotateKey ? "register_ok_but_missing_key_after_rotate" : "register_ok_but_missing_key");
         return false;
     }
 
