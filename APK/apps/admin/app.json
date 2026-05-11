@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "Smart Cabinet Admin",
+    "slug": "smart-cabinet-admin",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "platforms": ["android"],
+    "android": {
+      "package": "in.iotsoft.smartcabinet.admin",
+      "versionCode": 1
+    }
+  }
+}

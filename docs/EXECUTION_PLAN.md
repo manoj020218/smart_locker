@@ -1,7 +1,7 @@
 ﻿# Execution Plan
 
-Last updated: 2026-05-10
-Plan version: 1.4
+Last updated: 2026-05-11
+Plan version: 1.7
 
 ## 1) Phase Plan
 
@@ -138,7 +138,7 @@ A feature is complete only when:
 
 ## 7) Final Progress Snapshot (Reality Check)
 
-Status date: 2026-05-10
+Status date: 2026-05-11
 Assessment source: all repository Markdown files + current implementation files in `EDGE/firmware` and `VPS/api`, plus successful local firmware build/flash and LAN API validation (`pio run` + `upload` + endpoint checks, 2026-05-10) including Iteration B sync worker reliability fixes.
 
 ### Phase 1 (MVP) Status
@@ -149,8 +149,10 @@ Assessment source: all repository Markdown files + current implementation files 
    - Local policy store module is implemented for users/rules/drawers/license/sync state (NVS persisted).
    - Rule engine module is implemented and wired to Wiegand callback for automatic open/deny decisions.
    - Replay-window guard is implemented for duplicate Wiegand bursts.
-2. Admin mobile app (BLE provisioning + user/rule config): `PENDING`
-   - APK workspace is scaffold-only (`.gitkeep` placeholders).
+2. Admin mobile app (BLE provisioning + user/rule config): `IN PROGRESS`
+   - Admin app Phase-1 starter is now added under `APK/apps/admin`.
+   - Credential login + manufacturer dashboard + cabinet register + owner create/assign screens are implemented.
+   - BLE provisioning and admin users/rules/drawer lifecycle screens are still pending.
 3. Minimal VPS (license/config sync/logs/OTA manifest): `DONE (baseline)`
    - Core API routes are implemented and wired in Express.
    - Mongo collections and indexes are implemented.
@@ -218,11 +220,33 @@ Assessment source: all repository Markdown files + current implementation files 
 13. LAN operator dashboard now includes explicit VPS connectivity panel:
    - status badge (`Connected`, `Needs Registration`, `Disabled`, `Disconnected`)
    - base URL, device ID, and last sync error visible from `http://<device-ip>/`
+14. Non-Docker relay-integration deployment pack is prepared in repo:
+   - bare-metal runbook for shared Mosquitto + PM2 + nginx
+   - strict namespace/auth boundaries (`relay/#` vs `cabinet/#`)
+   - rollback-first operational checklist
+15. Live relay shared-infra integration is now applied on VPS (`2026-05-10`):
+   - Mosquitto shared broker updated with cabinet users + ACL while preserving relay runtime
+   - namespace isolation smoke-verified both directions (`cabinet/#` and `relay/#`)
+   - smart-locker-api restart verified healthy (`/health` OK, device config polling continues `200`)
+   - production registration gate hardened (`REQUIRE_DEVICE_PROVISION_KEY=true` + device allowlist)
+16. Dedicated Admin APK planning baseline is documented:
+   - dedicated plan file created at `APK/docs/ADMIN_APK_EXECUTION_PLAN.md`
+   - includes phased rollout, API gap list, and definition-of-ready gate before coding
+17. Manufacturer demo handover pack is delivered for sales demos:
+   - runbook at `VPS/api/demo/README.md`
+   - Postman environment + collection for repeatable manufacturer flow
+   - Windows/Linux smoke wrappers for one-command demo execution
+18. Admin APK Phase-1 execution is started in code:
+   - Expo-managed RN starter with token session persistence
+   - live API wiring for login, dashboard, cabinet register, owner create/assign
 
 ### Left
 
 1. Complete EDGE <-> VPS sync evidence pack (outage/recovery, drift scenarios, log push with real transactions, and soak logs).
-2. Build Admin APK (React Native) with BLE onboarding and user/rule/drawer configuration flows.
+2. Continue Admin APK from current starter to full MVP:
+   - add BLE onboarding/provision flow
+   - add users/rules/drawer management screens
+   - add deeper role/tenant guard and retry UX
 3. Add automated tests:
    - EDGE unit tests (CRC/parser/rule decisions)
    - VPS route + auth integration tests
@@ -247,13 +271,17 @@ Exit criteria:
 
 1. Implement/verify config pull cadence and log batch push from EDGE. `CODED (evidence test pending)`
 2. Add conflict/version checks and explicit error telemetry fields. `CODED + LAN SMOKE VERIFIED (drift/outage validation pending)`
-3. Complete Mongo cutover (`smart_locker`) and document migration steps. `DOCS+SCRIPT READY, PROD EXECUTION PENDING`
+3. Apply live shared-infra relay integration and security baseline on VPS. `DONE (broker ACL + API gate + health/smoke verified, 2026-05-10)`
+4. Complete Mongo cutover (`smart_locker`) and document migration steps. `DOCS+SCRIPT READY, PROD EXECUTION PENDING`
 
 Exit criteria:
 1. EDGE survives VPS outage and later re-syncs cleanly.
 2. Config version drift tests pass.
 
 ### Iteration C - Admin APK MVP
+
+Precondition:
+1. Dedicated APK plan approval (`APK/docs/ADMIN_APK_EXECUTION_PLAN.md`).
 
 1. Create RN app shell and auth bootstrap.
 2. Implement BLE scan/connect/provision flow.

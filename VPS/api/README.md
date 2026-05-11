@@ -104,9 +104,16 @@ MFR_PASSWORD='StrongPass#2026' \
 pnpm run smoke:manufacturer
 ```
 
+Windows / Linux wrapper scripts:
+
+- PowerShell: `./scripts/smoke_manufacturer_demo.ps1`
+- Bash: `./scripts/smoke_manufacturer_demo.sh`
+
 Postman demo collection:
 
 - `VPS/api/postman/manufacturer-demo.postman_collection.json`
+- `VPS/api/postman/manufacturer-demo.postman_environment.json`
+- Handover runbook: `VPS/api/demo/README.md`
 
 ## Environment Variables
 
