@@ -85,6 +85,7 @@ const main = async (): Promise<void> => {
         manufacturer_id: resolvedManufacturerId || undefined,
         owner_id: ownerId || undefined,
         cabinet_ids: cabinetIds,
+        fcm_tokens: [],
         must_change_password: mustChangePassword,
         ...(forcePasswordReset || !existing ? { password_hash: passwordHash } : {}),
         updated_at: new Date()

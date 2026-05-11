@@ -122,6 +122,8 @@ Optional:
 - `POST /v1/auth/login`
 - `GET /v1/auth/me`
 - `POST /v1/auth/change-password`
+- `POST /v1/auth/register-fcm-token`
+- `POST /v1/auth/remove-fcm-token`
 - `POST /v1/auth/mobile/google` (disabled by default unless `ENABLE_GOOGLE_AUTH=true`)
 
 ### Device APIs

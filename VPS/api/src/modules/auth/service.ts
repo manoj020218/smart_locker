@@ -151,6 +151,34 @@ export const updatePasswordForUser = async (
   await authUsers.updateOne({ user_id: userId }, update);
 };
 
+export const registerFcmTokenForUser = async (
+  authUsers: AuthUsersCollection,
+  userId: string,
+  token: string
+): Promise<void> => {
+  await authUsers.updateOne(
+    { user_id: userId },
+    {
+      $addToSet: { fcm_tokens: token },
+      $set: { updated_at: new Date() }
+    }
+  );
+};
+
+export const removeFcmTokenForUser = async (
+  authUsers: AuthUsersCollection,
+  userId: string,
+  token: string
+): Promise<void> => {
+  await authUsers.updateOne(
+    { user_id: userId },
+    {
+      $pull: { fcm_tokens: token },
+      $set: { updated_at: new Date() }
+    }
+  );
+};
+
 export const buildSeedUserId = (role: AuthRole, emailOrMobile: string): string => {
   const suffix = randomUUID().slice(0, 8);
   const prefix = role.replace(/[^a-z]/g, "").slice(0, 6) || "user";

@@ -1,7 +1,7 @@
 ﻿# System Contracts
 
 Last updated: 2026-05-11
-Contract version: 0.1.8
+Contract version: 0.1.9
 
 ## 1) Contract Principles
 
@@ -161,6 +161,8 @@ Retention baseline:
 - `POST /v1/auth/login`
 - `GET /v1/auth/me`
 - `POST /v1/auth/change-password`
+- `POST /v1/auth/register-fcm-token`
+- `POST /v1/auth/remove-fcm-token`
 - `POST /v1/device/register`
 - `GET /v1/device/:id/config`
 - `POST /v1/device/:id/logs/batch`
@@ -284,3 +286,11 @@ Additive only (non-breaking):
    - `GET /v1/manufacturer/dashboard`
    - `GET /v1/manufacturer/cabinets`
    - `POST /v1/manufacturer/cabinets/register`
+
+### 0.1.8 -> 0.1.9
+
+Additive only (non-breaking):
+
+1. Added FCM token lifecycle auth endpoints:
+   - `POST /v1/auth/register-fcm-token`
+   - `POST /v1/auth/remove-fcm-token`

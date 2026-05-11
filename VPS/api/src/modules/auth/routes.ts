@@ -14,6 +14,8 @@ import {
   buildDashboardRoute,
   buildPermissions,
   markSuccessfulLogin,
+  registerFcmTokenForUser,
+  removeFcmTokenForUser,
   updatePasswordForUser
 } from "./service.js";
 import type { AuthUserDoc } from "./types.js";
@@ -38,6 +40,10 @@ const loginSchema = z.object({
 const changePasswordSchema = z.object({
   current_password: z.string().min(6),
   new_password: z.string().min(8)
+});
+
+const fcmTokenSchema = z.object({
+  token: z.string().min(20).max(4096)
 });
 
 const googleBodySchema = z.object({
@@ -157,6 +163,46 @@ authRoutes.post(
     }
 
     await updatePasswordForUser(collections().authUsers, user.user_id, body.new_password);
+    res.json({ ok: true });
+  })
+);
+
+authRoutes.post(
+  "/register-fcm-token",
+  requireAuthJwt,
+  asyncHandler(async (req, res) => {
+    const claims = (req as typeof req & { user: AuthJwtPayload }).user;
+    const body = parseBody(fcmTokenSchema, req.body);
+    const userId = claims.user_id || claims.sub;
+    const user = await collections().authUsers.findOne<AuthUserDoc>({ user_id: userId });
+    if (!user) {
+      throw unauthorized("User not found");
+    }
+    if (user.status !== "active") {
+      throw forbidden("Account is not active");
+    }
+
+    await registerFcmTokenForUser(collections().authUsers, userId, body.token);
+    res.json({ ok: true });
+  })
+);
+
+authRoutes.post(
+  "/remove-fcm-token",
+  requireAuthJwt,
+  asyncHandler(async (req, res) => {
+    const claims = (req as typeof req & { user: AuthJwtPayload }).user;
+    const body = parseBody(fcmTokenSchema, req.body);
+    const userId = claims.user_id || claims.sub;
+    const user = await collections().authUsers.findOne<AuthUserDoc>({ user_id: userId });
+    if (!user) {
+      throw unauthorized("User not found");
+    }
+    if (user.status !== "active") {
+      throw forbidden("Account is not active");
+    }
+
+    await removeFcmTokenForUser(collections().authUsers, userId, body.token);
     res.json({ ok: true });
   })
 );

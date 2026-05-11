@@ -6,6 +6,8 @@ import {
   buildDashboardRoute,
   buildPermissions,
   markSuccessfulLogin,
+  registerFcmTokenForUser,
+  removeFcmTokenForUser,
   updatePasswordForUser
 } from "./service.js";
 import { hashPassword, verifyPassword } from "../../shared/password.js";
@@ -27,6 +29,7 @@ const makeUser = async (overrides: Partial<AuthUserDoc> = {}): Promise<AuthUserD
   status: "active",
   tenant_id: "tenant-001",
   cabinet_ids: ["cab-01"],
+  fcm_tokens: [],
   created_at: new Date(),
   updated_at: new Date(),
   ...overrides
@@ -49,7 +52,18 @@ const makeCollection = (users: Array<AuthUserDoc & { _id: string }>): FakeAuthCo
     const user = await this.findOne(filter);
     if (!user) return;
     const set = (update.$set as Record<string, unknown>) ?? {};
+    const addToSet = (update.$addToSet as Record<string, unknown>) ?? {};
+    const pull = (update.$pull as Record<string, unknown>) ?? {};
     Object.assign(user, set);
+    if (typeof addToSet.fcm_tokens === "string") {
+      user.fcm_tokens = user.fcm_tokens ?? [];
+      if (!user.fcm_tokens.includes(addToSet.fcm_tokens)) {
+        user.fcm_tokens.push(addToSet.fcm_tokens);
+      }
+    }
+    if (typeof pull.fcm_tokens === "string") {
+      user.fcm_tokens = (user.fcm_tokens ?? []).filter((token) => token !== pull.fcm_tokens);
+    }
   }
 });
 
@@ -95,4 +109,16 @@ test("role mapping returns expected dashboard and permissions", () => {
   assert.equal(buildDashboardRoute("manufacturer"), "/manufacturer");
   assert.ok(buildPermissions("manufacturer").includes("cabinet.register"));
   assert.ok(buildPermissions("member").includes("member.qr.read"));
+});
+
+test("register/remove fcm token keeps unique list", async () => {
+  const users = [await makeUser()];
+  const coll = makeCollection(users);
+  await registerFcmTokenForUser(coll as never, users[0].user_id, "token-001");
+  await registerFcmTokenForUser(coll as never, users[0].user_id, "token-001");
+  await registerFcmTokenForUser(coll as never, users[0].user_id, "token-002");
+  assert.deepEqual(users[0].fcm_tokens, ["token-001", "token-002"]);
+
+  await removeFcmTokenForUser(coll as never, users[0].user_id, "token-001");
+  assert.deepEqual(users[0].fcm_tokens, ["token-002"]);
 });

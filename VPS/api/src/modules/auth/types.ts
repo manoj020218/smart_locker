@@ -15,6 +15,7 @@ export type AuthUserDoc = {
   manufacturer_id?: string;
   owner_id?: string;
   cabinet_ids?: string[];
+  fcm_tokens?: string[];
   must_change_password?: boolean;
   created_at: Date;
   updated_at: Date;
