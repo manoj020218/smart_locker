@@ -1,5 +1,6 @@
 import { MongoClient } from "mongodb";
 import { cfg } from "../../config.js";
+import type { AuthUserDoc } from "../../modules/auth/types.js";
 
 const client = new MongoClient(cfg.mongodbUri, {
   maxPoolSize: 15
@@ -19,6 +20,7 @@ export const db = () => client.db(cfg.mongodbDbName);
 export const collections = () => {
   const database = db();
   return {
+    authUsers: database.collection<AuthUserDoc>("auth_users"),
     devices: database.collection("devices"),
     cabinets: database.collection("cabinets"),
     users: database.collection("users"),

@@ -2,7 +2,7 @@
 
 Minimal backend for Smart Cabinet Phase 1:
 
-1. mobile auth
+1. credential-based auth (seeded users)
 2. device registration
 3. config sync
 4. license checks
@@ -17,7 +17,7 @@ This implementation follows `docs/SYSTEM_CONTRACTS.md` (`0.1.5`).
 
 - Node.js + TypeScript + Express
 - MongoDB (existing VPS deployment)
-- Firebase Admin SDK (Google login token verification)
+- Firebase Admin SDK (optional for notification/integrations)
 
 ## Folder Layout
 
@@ -65,6 +65,7 @@ pnpm run dev
 ```bash
 pnpm run check
 pnpm run build
+pnpm run test
 ```
 
 5. Mongo cutover dry-run / apply:
@@ -83,6 +84,17 @@ Optional env overrides:
 - `MONGO_SOURCE_DB` (default `smart_cabinet`)
 - `MONGO_TARGET_DB` (default `smart_locker`)
 
+6. Seed credential user (manufacturer/super admin/etc):
+
+```bash
+AUTH_SEED_EMAIL=mfr@example.com \
+AUTH_SEED_PASSWORD='StrongPass#2026' \
+AUTH_SEED_ROLE=manufacturer \
+AUTH_SEED_DISPLAY_NAME='Demo Manufacturer' \
+AUTH_SEED_TENANT_ID=tenant-001 \
+pnpm run seed:auth-user
+```
+
 ## Environment Variables
 
 Required:
@@ -93,6 +105,9 @@ Required:
 
 Optional:
 
+- `JWT_EXPIRES_IN` (default `12h`)
+- `BCRYPT_ROUNDS` (default `10`)
+- `ENABLE_GOOGLE_AUTH` (default `false`)
 - `DEVICE_PROVISION_KEY` (server-side registration secret)
 - `REQUIRE_DEVICE_PROVISION_KEY` (default `true`; keep `true` in production)
 - `DEVICE_REGISTRATION_ALLOWLIST` (optional comma-separated `device_id` allowlist)
@@ -102,12 +117,12 @@ Optional:
 
 ## API Surface
 
-### Mobile Auth
+### Auth
 
-- `POST /v1/auth/mobile/google`
-- Verifies Firebase ID token (or bypass in dev)
-- Creates/updates user profile
-- Returns backend JWT for admin endpoints
+- `POST /v1/auth/login`
+- `GET /v1/auth/me`
+- `POST /v1/auth/change-password`
+- `POST /v1/auth/mobile/google` (disabled by default unless `ENABLE_GOOGLE_AUTH=true`)
 
 ### Device APIs
 
@@ -136,6 +151,7 @@ Admin protected endpoints require:
 
 ## Data Model (Mongo Collections)
 
+- `auth_users`
 - `devices`
 - `cabinets`
 - `users`
@@ -158,6 +174,17 @@ Indexes are auto-created on startup (`src/adapters/mongo/indexes.ts`).
 5. Default DB name has been moved to `smart_locker`; use the cutover script for existing `smart_cabinet` data.
 
 ## Minimal cURL Flow
+
+Login with seeded credentials:
+
+```bash
+curl -X POST http://localhost:8080/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "identifier":"mfr@example.com",
+    "password":"StrongPass#2026"
+  }'
+```
 
 Register device:
 

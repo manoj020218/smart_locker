@@ -4,6 +4,12 @@ export const ensureMongoIndexes = async (): Promise<void> => {
   const c = collections();
 
   await Promise.all([
+    c.authUsers.createIndex({ user_id: 1 }, { unique: true }),
+    c.authUsers.createIndex({ email_lower: 1 }, { unique: true, sparse: true }),
+    c.authUsers.createIndex({ mobile: 1 }, { unique: true, sparse: true }),
+    c.authUsers.createIndex({ role: 1, status: 1 }),
+    c.authUsers.createIndex({ tenant_id: 1, role: 1 }),
+
     c.devices.createIndex({ device_id: 1 }, { unique: true }),
     c.devices.createIndex({ cabinet_id: 1 }),
     c.devices.createIndex({ tenant_id: 1 }),

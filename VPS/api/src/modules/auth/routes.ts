@@ -3,111 +3,227 @@ import { z } from "zod";
 import { verifyFirebaseIdToken } from "../../adapters/firebase/firebase_admin.js";
 import { collections } from "../../adapters/mongo/client.js";
 import { cfg } from "../../config.js";
-import { unauthorized } from "../../shared/errors.js";
+import type { AuthJwtPayload } from "../../shared/auth.js";
+import { requireAuthJwt, signAuthJwt, hashToken } from "../../shared/auth.js";
+import { badRequest, forbidden, unauthorized } from "../../shared/errors.js";
 import { asyncHandler } from "../../shared/http.js";
-import { signMobileJwt, hashToken } from "../../shared/auth.js";
+import { verifyPassword } from "../../shared/password.js";
 import { parseBody } from "../../shared/validation.js";
+import {
+  authenticateCredentials,
+  buildDashboardRoute,
+  buildPermissions,
+  markSuccessfulLogin,
+  updatePasswordForUser
+} from "./service.js";
+import type { AuthUserDoc } from "./types.js";
 
-const bodySchema = z.object({
+const roleSchema = z.enum([
+  "super_admin",
+  "manufacturer",
+  "owner",
+  "cabinet_admin",
+  "operator",
+  "member",
+  "admin",
+  "agent",
+  "customer"
+]);
+
+const loginSchema = z.object({
+  identifier: z.string().min(3),
+  password: z.string().min(6)
+});
+
+const changePasswordSchema = z.object({
+  current_password: z.string().min(6),
+  new_password: z.string().min(8)
+});
+
+const googleBodySchema = z.object({
   id_token: z.string().min(1).optional(),
   tenant_id: z.string().min(1).default("tenant-default"),
   cabinet_id: z.string().min(1).optional(),
-  requested_role: z.enum(["admin", "agent", "customer"]).optional(),
+  requested_role: roleSchema.optional(),
   email: z.string().email().optional(),
   name: z.string().min(1).optional()
 });
 
+const toAuthProfile = (user: Pick<AuthUserDoc, "user_id" | "display_name" | "email" | "mobile" | "role" | "tenant_id" | "status" | "manufacturer_id" | "owner_id" | "cabinet_ids" | "must_change_password">) => ({
+  user_id: user.user_id,
+  display_name: user.display_name,
+  email: user.email ?? "",
+  mobile: user.mobile ?? "",
+  role: user.role,
+  tenant_id: user.tenant_id,
+  status: user.status,
+  manufacturer_id: user.manufacturer_id ?? "",
+  owner_id: user.owner_id ?? "",
+  cabinet_ids: user.cabinet_ids ?? [],
+  must_change_password: Boolean(user.must_change_password)
+});
+
+const buildClaims = (user: Pick<AuthUserDoc, "user_id" | "email" | "role" | "tenant_id" | "manufacturer_id" | "owner_id" | "cabinet_ids">): AuthJwtPayload => {
+  const dashboardRoute = buildDashboardRoute(user.role);
+  const permissions = buildPermissions(user.role);
+  return {
+    sub: user.user_id,
+    user_id: user.user_id,
+    email: user.email ?? "",
+    role: user.role,
+    tenant_id: user.tenant_id,
+    manufacturer_id: user.manufacturer_id,
+    owner_id: user.owner_id,
+    cabinet_ids: user.cabinet_ids ?? [],
+    permissions,
+    dashboard_route: dashboardRoute
+  };
+};
+
 export const authRoutes = Router();
 
 authRoutes.post(
-  "/mobile/google",
+  "/login",
   asyncHandler(async (req, res) => {
-    const body = parseBody(bodySchema, req.body);
+    const body = parseBody(loginSchema, req.body);
+    const user = await authenticateCredentials(collections().authUsers, body.identifier, body.password);
+    await markSuccessfulLogin(collections().authUsers, user.user_id);
 
-    let uid = "";
-    let email = "";
-    let name = "";
-
-    if (cfg.allowInsecureAuthBypass) {
-      uid = `dev-${body.email ?? "user"}`;
-      email = body.email ?? "dev-admin@local.test";
-      name = body.name ?? "Dev Admin";
-    } else {
-      if (!body.id_token) {
-        throw unauthorized("id_token is required");
-      }
-      let decoded;
-      try {
-        decoded = await verifyFirebaseIdToken(body.id_token);
-      } catch {
-        throw unauthorized("Invalid or unverifiable id_token");
-      }
-      uid = decoded.uid;
-      email = decoded.email ?? "";
-      name = decoded.name ?? "";
-    }
-
-    const users = collections().users;
-    const existing = await users.findOne<{
-      user_id: string;
-      auth_uid: string;
-      email: string;
-      role: "admin" | "agent" | "customer";
-      tenant_id: string;
-      cabinet_id?: string;
-      display_name?: string;
-    }>({ auth_uid: uid });
-
-    const role: "admin" | "agent" | "customer" = existing?.role ?? body.requested_role ?? "admin";
-    const tenantId: string = existing?.tenant_id ?? body.tenant_id ?? "tenant-default";
-    const cabinetId = existing?.cabinet_id ?? body.cabinet_id ?? "cab-default";
-    const userId = existing?.user_id ?? `usr-${uid.slice(-8).replace(/[^a-zA-Z0-9]/g, "") || "local"}`;
-
-    await users.updateOne(
-      { auth_uid: uid },
-      {
-        $set: {
-          user_id: userId,
-          auth_uid: uid,
-          email,
-          display_name: name,
-          role,
-          tenant_id: tenantId,
-          cabinet_id: cabinetId,
-          updated_at: new Date()
-        },
-        $setOnInsert: {
-          created_at: new Date()
-        }
-      },
-      { upsert: true }
-    );
-
-    const accessToken = signMobileJwt({
-      uid,
-      email,
-      role,
-      tenant_id: tenantId
-    });
-
+    const claims = buildClaims(user);
+    const token = signAuthJwt(claims);
     await collections().mobileSessions.insertOne({
-      uid,
-      tenant_id: tenantId,
-      token_hash: hashToken(accessToken),
+      uid: user.user_id,
+      tenant_id: user.tenant_id,
+      token_hash: hashToken(token),
       created_at: new Date()
     });
 
     res.json({
       ok: true,
-      token: accessToken,
-      profile: {
-        uid,
-        email,
-        name,
-        role,
-        tenant_id: tenantId,
-        cabinet_id: cabinetId
+      token,
+      profile: toAuthProfile(user),
+      allowed_permissions: claims.permissions ?? [],
+      dashboard_route: claims.dashboard_route
+    });
+  })
+);
+
+authRoutes.get(
+  "/me",
+  requireAuthJwt,
+  asyncHandler(async (req, res) => {
+    const claims = (req as typeof req & { user: AuthJwtPayload }).user;
+    const userId = claims.user_id || claims.sub;
+    const user = await collections().authUsers.findOne<AuthUserDoc>({ user_id: userId });
+    if (!user) {
+      throw unauthorized("User not found");
+    }
+    if (user.status !== "active") {
+      throw forbidden("Account is not active");
+    }
+
+    const nextClaims = buildClaims(user);
+    res.json({
+      ok: true,
+      profile: toAuthProfile(user),
+      allowed_permissions: nextClaims.permissions ?? [],
+      dashboard_route: nextClaims.dashboard_route
+    });
+  })
+);
+
+authRoutes.post(
+  "/change-password",
+  requireAuthJwt,
+  asyncHandler(async (req, res) => {
+    const claims = (req as typeof req & { user: AuthJwtPayload }).user;
+    const body = parseBody(changePasswordSchema, req.body);
+    if (body.current_password === body.new_password) {
+      throw badRequest("new_password must be different from current_password");
+    }
+
+    const userId = claims.user_id || claims.sub;
+    const user = await collections().authUsers.findOne<AuthUserDoc>({ user_id: userId });
+    if (!user) {
+      throw unauthorized("User not found");
+    }
+    if (user.status !== "active") {
+      throw forbidden("Account is not active");
+    }
+
+    const currentOk = await verifyPassword(body.current_password, user.password_hash);
+    if (!currentOk) {
+      throw unauthorized("Current password is invalid");
+    }
+
+    await updatePasswordForUser(collections().authUsers, user.user_id, body.new_password);
+    res.json({ ok: true });
+  })
+);
+
+authRoutes.post(
+  "/mobile/google",
+  asyncHandler(async (req, res) => {
+    if (!cfg.enableGoogleAuth) {
+      throw forbidden("Google auth is disabled");
+    }
+
+    const body = parseBody(googleBodySchema, req.body);
+    let email = "";
+    let displayName = "";
+
+    if (cfg.allowInsecureAuthBypass) {
+      email = body.email ?? "dev-admin@local.test";
+      displayName = body.name ?? "Dev Admin";
+    } else {
+      if (!body.id_token) {
+        throw unauthorized("id_token is required");
       }
+      const decoded = await verifyFirebaseIdToken(body.id_token);
+      email = decoded.email ?? "";
+      displayName = decoded.name ?? "Google User";
+    }
+
+    if (!email) {
+      throw unauthorized("Email not available in token");
+    }
+
+    const emailLower = email.trim().toLowerCase();
+    const existing = await collections().authUsers.findOne<AuthUserDoc>({ email_lower: emailLower });
+    if (!existing) {
+      throw forbidden("Google account is not pre-provisioned");
+    }
+
+    if (existing.status !== "active") {
+      throw forbidden("Account is not active");
+    }
+
+    await collections().authUsers.updateOne(
+      { user_id: existing.user_id },
+      {
+        $set: {
+          display_name: displayName || existing.display_name,
+          updated_at: new Date(),
+          last_login_at: new Date()
+        }
+      }
+    );
+
+    const claims = buildClaims(existing);
+    const token = signAuthJwt(claims);
+    await collections().mobileSessions.insertOne({
+      uid: existing.user_id,
+      tenant_id: existing.tenant_id,
+      token_hash: hashToken(token),
+      created_at: new Date()
+    });
+
+    res.json({
+      ok: true,
+      token,
+      profile: toAuthProfile(existing),
+      allowed_permissions: claims.permissions ?? [],
+      dashboard_route: claims.dashboard_route
     });
   })
 );

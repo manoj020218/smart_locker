@@ -1,7 +1,7 @@
 ﻿# System Contracts
 
-Last updated: 2026-05-10
-Contract version: 0.1.6
+Last updated: 2026-05-11
+Contract version: 0.1.7
 
 ## 1) Contract Principles
 
@@ -158,6 +158,9 @@ Retention baseline:
 ## 7) Minimal API Surface (VPS)
 
 - `POST /v1/auth/mobile/google`
+- `POST /v1/auth/login`
+- `GET /v1/auth/me`
+- `POST /v1/auth/change-password`
 - `POST /v1/device/register`
 - `GET /v1/device/:id/config`
 - `POST /v1/device/:id/logs/batch`
@@ -205,6 +208,10 @@ Retention baseline:
 6. Device registration hard-gate:
    - `x-provision-key` required in production
    - optional server-side `device_id` allowlist enforcement
+7. Credential auth baseline for staff/manufacturer onboarding:
+   - seeded auth users in `auth_users`
+   - bcrypt password hash storage
+   - JWT bearer with role claims
 
 ## 9) Versioning Policy
 
@@ -258,3 +265,10 @@ Additive only (non-breaking):
 
 1. Added explicit device-registration hard-gate guidance (`x-provision-key`, optional allowlist).
 2. Formalized security note for stable domain-based EDGE sync routing (backend can move behind DNS/proxy without firmware contract changes).
+
+### 0.1.6 -> 0.1.7
+
+Additive only (non-breaking):
+
+1. Added credential-auth endpoints (`/v1/auth/login`, `/v1/auth/me`, `/v1/auth/change-password`) for seeded manufacturer/staff onboarding.
+2. Added security baseline guidance for seeded auth users with bcrypt + JWT claims.
