@@ -1,6 +1,8 @@
 import type { AuthJwtPayload } from "../../shared/auth.js";
 import { badRequest, forbidden } from "../../shared/errors.js";
 
+export type HealthStatus = "online" | "offline" | "never_seen";
+
 export const resolveManufacturerIdFromClaims = (
   claims: AuthJwtPayload,
   requestedManufacturerId?: string
@@ -38,3 +40,23 @@ export const isDeviceOnline = (
   const diffMs = nowMs - lastSeenAt.getTime();
   return diffMs >= 0 && diffMs <= thresholdSec * 1000;
 };
+
+export const resolveHealthStatus = (
+  lastSeenAt: Date | null | undefined,
+  nowMs: number,
+  thresholdSec: number
+): HealthStatus => {
+  if (!lastSeenAt) return "never_seen";
+  return isDeviceOnline(lastSeenAt, nowMs, thresholdSec) ? "online" : "offline";
+};
+
+export const parseEpochSec = (value: unknown, fieldName: string): number => {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num < 0) {
+    throw badRequest(`${fieldName} must be a non-negative integer epoch seconds`);
+  }
+  return Math.floor(num);
+};
+
+export const isoDayFromEpochSec = (epochSec: number): string =>
+  new Date(epochSec * 1000).toISOString().slice(0, 10);

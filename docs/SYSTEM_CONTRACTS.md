@@ -1,7 +1,7 @@
 ﻿# System Contracts
 
 Last updated: 2026-05-11
-Contract version: 0.1.9
+Contract version: 0.1.10
 
 ## 1) Contract Principles
 
@@ -173,6 +173,11 @@ Retention baseline:
 - `POST /v1/admin/drawers/map`
 - `GET /v1/manufacturer/dashboard`
 - `GET /v1/manufacturer/cabinets`
+- `GET /v1/manufacturer/health`
+- `GET /v1/manufacturer/usage`
+- `GET /v1/manufacturer/owners`
+- `POST /v1/manufacturer/owners`
+- `POST /v1/manufacturer/cabinets/:cabinetId/assign-owner`
 - `POST /v1/manufacturer/cabinets/register`
 - `GET /v1/public/apk/version?platform=android`
 - `POST /v1/admin/apk/releases`
@@ -294,3 +299,15 @@ Additive only (non-breaking):
 1. Added FCM token lifecycle auth endpoints:
    - `POST /v1/auth/register-fcm-token`
    - `POST /v1/auth/remove-fcm-token`
+
+### 0.1.9 -> 0.1.10
+
+Additive only (non-breaking):
+
+1. Added manufacturer sell-phase onboarding endpoints:
+   - `POST /v1/manufacturer/owners`
+   - `POST /v1/manufacturer/cabinets/:cabinetId/assign-owner`
+2. Added manufacturer filtered reporting endpoints:
+   - `GET /v1/manufacturer/health`
+   - `GET /v1/manufacturer/usage`
+   - `GET /v1/manufacturer/owners`

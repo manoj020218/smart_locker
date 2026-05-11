@@ -155,6 +155,11 @@ Admin protected endpoints require:
 
 - `GET /v1/manufacturer/dashboard`
 - `GET /v1/manufacturer/cabinets`
+- `GET /v1/manufacturer/health`
+- `GET /v1/manufacturer/usage`
+- `GET /v1/manufacturer/owners`
+- `POST /v1/manufacturer/owners`
+- `POST /v1/manufacturer/cabinets/:cabinetId/assign-owner`
 - `POST /v1/manufacturer/cabinets/register`
 
 ## Data Model (Mongo Collections)
