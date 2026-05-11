@@ -1,7 +1,7 @@
 ﻿# System Contracts
 
 Last updated: 2026-05-11
-Contract version: 0.1.7
+Contract version: 0.1.8
 
 ## 1) Contract Principles
 
@@ -169,6 +169,9 @@ Retention baseline:
 - `POST /v1/admin/users`
 - `POST /v1/admin/rules`
 - `POST /v1/admin/drawers/map`
+- `GET /v1/manufacturer/dashboard`
+- `GET /v1/manufacturer/cabinets`
+- `POST /v1/manufacturer/cabinets/register`
 - `GET /v1/public/apk/version?platform=android`
 - `POST /v1/admin/apk/releases`
 
@@ -272,3 +275,12 @@ Additive only (non-breaking):
 
 1. Added credential-auth endpoints (`/v1/auth/login`, `/v1/auth/me`, `/v1/auth/change-password`) for seeded manufacturer/staff onboarding.
 2. Added security baseline guidance for seeded auth users with bcrypt + JWT claims.
+
+### 0.1.7 -> 0.1.8
+
+Additive only (non-breaking):
+
+1. Added manufacturer confidence endpoints:
+   - `GET /v1/manufacturer/dashboard`
+   - `GET /v1/manufacturer/cabinets`
+   - `POST /v1/manufacturer/cabinets/register`

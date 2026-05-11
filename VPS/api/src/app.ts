@@ -8,6 +8,7 @@ import { authRoutes } from "./modules/auth/routes.js";
 import { cabinetRoutes } from "./modules/cabinet/routes.js";
 import { licenseRoutes } from "./modules/license/routes.js";
 import { logsRoutes } from "./modules/logs/routes.js";
+import { manufacturerRoutes } from "./modules/manufacturer/routes.js";
 import { otaRoutes } from "./modules/ota/routes.js";
 import { syncRoutes } from "./modules/sync/routes.js";
 import { notFound } from "./shared/errors.js";
@@ -44,6 +45,7 @@ export const createApp = (): express.Express => {
   app.use("/v1/device", otaRoutes);
   app.use("/v1/admin", cabinetRoutes);
   app.use("/v1/admin/apk", apkAdminRoutes);
+  app.use("/v1/manufacturer", manufacturerRoutes);
 
   app.use((_req, _res, next) => {
     next(notFound("Route not found"));

@@ -13,7 +13,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "check": "tsc --noEmit -p tsconfig.json",
-    "test": "tsx --test src/modules/auth/service.test.ts",
+    "test": "tsx --test src/modules/auth/service.test.ts src/modules/manufacturer/service.test.ts",
     "mongo:cutover": "tsx scripts/mongo_cutover.ts",
     "seed:auth-user": "tsx scripts/seed_auth_user.ts"
   },

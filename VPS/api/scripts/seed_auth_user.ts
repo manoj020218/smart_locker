@@ -67,6 +67,9 @@ const main = async (): Promise<void> => {
   await ensureMongoIndexes();
 
   const existing = await collections().authUsers.findOne<{ user_id: string }>({ email_lower: emailLower });
+  const resolvedManufacturerId =
+    manufacturerId || (role === "manufacturer" ? `mfr-${(existing?.user_id ?? userId).replace(/[^a-zA-Z0-9]/g, "").slice(-8)}` : "");
+
   await collections().authUsers.updateOne(
     { email_lower: emailLower },
     {
@@ -79,7 +82,7 @@ const main = async (): Promise<void> => {
         role,
         status,
         tenant_id: tenantId,
-        manufacturer_id: manufacturerId || undefined,
+        manufacturer_id: resolvedManufacturerId || undefined,
         owner_id: ownerId || undefined,
         cabinet_ids: cabinetIds,
         must_change_password: mustChangePassword,

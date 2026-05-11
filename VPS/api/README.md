@@ -149,6 +149,12 @@ Admin protected endpoints require:
 
 - `Authorization: Bearer <token>`
 
+### Manufacturer APIs (JWT, role=manufacturer|super_admin)
+
+- `GET /v1/manufacturer/dashboard`
+- `GET /v1/manufacturer/cabinets`
+- `POST /v1/manufacturer/cabinets/register`
+
 ## Data Model (Mongo Collections)
 
 - `auth_users`
