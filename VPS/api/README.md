@@ -95,6 +95,19 @@ AUTH_SEED_TENANT_ID=tenant-001 \
 pnpm run seed:auth-user
 ```
 
+7. Run manufacturer demo smoke flow:
+
+```bash
+BASE_URL=http://127.0.0.1:8080 \
+MFR_IDENTIFIER=mfr@example.com \
+MFR_PASSWORD='StrongPass#2026' \
+pnpm run smoke:manufacturer
+```
+
+Postman demo collection:
+
+- `VPS/api/postman/manufacturer-demo.postman_collection.json`
+
 ## Environment Variables
 
 Required:

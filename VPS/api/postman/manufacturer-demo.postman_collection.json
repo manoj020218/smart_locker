@@ -1,0 +1,211 @@
+{
+  "info": {
+    "_postman_id": "3f3eb8fe-3f6b-45bc-a40a-4fd688963f9f",
+    "name": "Smart Cabinet Manufacturer Demo",
+    "description": "Manufacturer onboarding and confidence demo flow for Smart Cabinet VPS API.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:8080" },
+    { "key": "identifier", "value": "mfr@example.com" },
+    { "key": "password", "value": "StrongPass#2026" },
+    { "key": "token", "value": "" },
+    { "key": "cabinetId", "value": "cab-demo-001" },
+    { "key": "ownerEmail", "value": "owner.demo@example.com" },
+    { "key": "ownerPassword", "value": "Owner#12345" },
+    { "key": "ownerUserId", "value": "" },
+    { "key": "fcmToken", "value": "fcm-demo-token-12345678901234567890" }
+  ],
+  "item": [
+    {
+      "name": "1) Auth Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('login status 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "const json = pm.response.json();",
+              "pm.expect(json.ok).to.eql(true);",
+              "pm.environment.set('token', json.token || '');"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"identifier\": \"{{identifier}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": "{{baseUrl}}/v1/auth/login"
+      }
+    },
+    {
+      "name": "2) Auth Me",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": "{{baseUrl}}/v1/auth/me"
+      }
+    },
+    {
+      "name": "3) Register Cabinet",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"cabinet_id\": \"{{cabinetId}}\",\n  \"cabinet_name\": \"Demo Cabinet\",\n  \"location_name\": \"Demo Site\",\n  \"total_lockers\": 24,\n  \"mode\": \"DEMO\",\n  \"access_modes\": [\"WIEGAND\"]\n}"
+        },
+        "url": "{{baseUrl}}/v1/manufacturer/cabinets/register"
+      }
+    },
+    {
+      "name": "4) Create Owner",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('create owner 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "const json = pm.response.json();",
+              "pm.environment.set('ownerUserId', json.owner_user_id || '');"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"display_name\": \"Demo Owner\",\n  \"email\": \"{{ownerEmail}}\",\n  \"password\": \"{{ownerPassword}}\",\n  \"cabinet_ids\": [\"{{cabinetId}}\"]\n}"
+        },
+        "url": "{{baseUrl}}/v1/manufacturer/owners"
+      }
+    },
+    {
+      "name": "5) Assign Owner",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"owner_user_id\": \"{{ownerUserId}}\"\n}"
+        },
+        "url": "{{baseUrl}}/v1/manufacturer/cabinets/{{cabinetId}}/assign-owner"
+      }
+    },
+    {
+      "name": "6) Manufacturer Dashboard",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": "{{baseUrl}}/v1/manufacturer/dashboard"
+      }
+    },
+    {
+      "name": "7) Manufacturer Cabinets",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": "{{baseUrl}}/v1/manufacturer/cabinets"
+      }
+    },
+    {
+      "name": "8) Manufacturer Health",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": "{{baseUrl}}/v1/manufacturer/health?limit=20"
+      }
+    },
+    {
+      "name": "9) Manufacturer Usage (cabinet)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": "{{baseUrl}}/v1/manufacturer/usage?group_by=cabinet"
+      }
+    },
+    {
+      "name": "10) Manufacturer Usage (day)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": "{{baseUrl}}/v1/manufacturer/usage?group_by=day"
+      }
+    },
+    {
+      "name": "11) Manufacturer Owners",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": "{{baseUrl}}/v1/manufacturer/owners"
+      }
+    },
+    {
+      "name": "12) Register FCM Token",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"token\": \"{{fcmToken}}\"\n}"
+        },
+        "url": "{{baseUrl}}/v1/auth/register-fcm-token"
+      }
+    },
+    {
+      "name": "13) Remove FCM Token",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"token\": \"{{fcmToken}}\"\n}"
+        },
+        "url": "{{baseUrl}}/v1/auth/remove-fcm-token"
+      }
+    }
+  ]
+}

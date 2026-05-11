@@ -15,7 +15,8 @@
     "check": "tsc --noEmit -p tsconfig.json",
     "test": "tsx --test src/modules/auth/service.test.ts src/modules/manufacturer/service.test.ts",
     "mongo:cutover": "tsx scripts/mongo_cutover.ts",
-    "seed:auth-user": "tsx scripts/seed_auth_user.ts"
+    "seed:auth-user": "tsx scripts/seed_auth_user.ts",
+    "smoke:manufacturer": "tsx scripts/smoke_manufacturer_demo.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
