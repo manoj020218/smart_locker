@@ -3,7 +3,7 @@ set -e
 
 # Smart Locker - First Time VPS Setup
 # Prereq on VPS: Node.js 20+, npm, PM2, MongoDB available.
-# Uses pnpm on VPS (bootstrapped via corepack when available).
+# Uses pnpm on VPS (corepack preferred, lockfile-driven install).
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -63,12 +63,13 @@ cd $VPS_DIR/VPS/api
 if ! command -v pnpm >/dev/null 2>&1; then
   if command -v corepack >/dev/null 2>&1; then
     corepack enable
-    corepack prepare pnpm@latest --activate
+    corepack prepare pnpm@10.10.0 --activate
   else
-    npm install -g pnpm
+    echo 'ERROR: pnpm not found and corepack unavailable. Install pnpm first.'
+    exit 1
   fi
 fi
-pnpm install --prod=false
+CI=true pnpm install --ignore-workspace --frozen-lockfile --prod=false --prefer-offline
 pnpm run build
 "
 

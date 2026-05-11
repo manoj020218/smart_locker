@@ -3,7 +3,7 @@ set -e
 
 # Smart Locker - Backend Update Script
 # Uploads VPS/api and deploy config to VPS, then rebuilds and restarts PM2.
-# Uses pnpm on VPS (bootstrapped via corepack when available).
+# Uses pnpm on VPS (corepack preferred, lockfile-driven install).
 # Run from project root or anywhere: bash VPS/deploy/update-backend.sh
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -65,12 +65,13 @@ cd $VPS_DIR/VPS/api
 if ! command -v pnpm >/dev/null 2>&1; then
   if command -v corepack >/dev/null 2>&1; then
     corepack enable
-    corepack prepare pnpm@latest --activate
+    corepack prepare pnpm@10.10.0 --activate
   else
-    npm install -g pnpm
+    echo 'ERROR: pnpm not found and corepack unavailable. Install pnpm first.'
+    exit 1
   fi
 fi
-pnpm install --prod=false
+CI=true pnpm install --ignore-workspace --frozen-lockfile --prod=false --prefer-offline
 pnpm run build
 "
 

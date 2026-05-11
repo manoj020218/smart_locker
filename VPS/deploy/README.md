@@ -15,6 +15,7 @@ These scripts follow the same workflow style as the `qrunlock` project and targe
 6. `ecosystem.config.cjs` - PM2 app definition
 7. `nginx-smartlocker.conf.template` - nginx config template for domain and API proxy
 8. `.env.deploy.example` - deploy variables template
+9. `relay-no-docker/` - integration pack for sharing live relay MQTT infra on bare-metal VPS (no Docker)
 
 ## Prepare
 
@@ -22,6 +23,8 @@ These scripts follow the same workflow style as the `qrunlock` project and targe
    - `cp VPS/deploy/.env.deploy.example VPS/deploy/.env.deploy`
 2. Fill real values in `.env.deploy`
 3. Keep `.env.deploy` local only (never commit)
+4. Keep `VPS/api/pnpm-lock.yaml` committed for deterministic + faster VPS install.
+5. Ensure VPS has `pnpm` available (or Node `corepack` enabled).
 
 ## Commands
 

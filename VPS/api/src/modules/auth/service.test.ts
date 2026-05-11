@@ -5,6 +5,7 @@ import {
   authenticateCredentials,
   buildDashboardRoute,
   buildPermissions,
+  buildSeedUserId,
   markSuccessfulLogin,
   registerFcmTokenForUser,
   removeFcmTokenForUser,
@@ -121,4 +122,14 @@ test("register/remove fcm token keeps unique list", async () => {
 
   await removeFcmTokenForUser(coll as never, users[0].user_id, "token-001");
   assert.deepEqual(users[0].fcm_tokens, ["token-002"]);
+});
+
+test("buildSeedUserId is deterministic and avoids same-domain collisions", () => {
+  const a = buildSeedUserId("owner", "alice@example.com");
+  const aAgain = buildSeedUserId("owner", "ALICE@example.com");
+  const b = buildSeedUserId("owner", "bob@example.com");
+
+  assert.equal(a, aAgain);
+  assert.notEqual(a, b);
+  assert.match(a, /^owner-[a-z0-9]{12}$/);
 });

@@ -488,7 +488,7 @@ manufacturerRoutes.post(
       display_name: body.company_name?.trim() || body.display_name.trim(),
       email: body.email.trim(),
       email_lower: emailLower,
-      mobile: mobile || undefined,
+      ...(mobile ? { mobile } : {}),
       password_hash: passwordHash,
       role: "owner",
       status: ownerStatus,

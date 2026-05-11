@@ -78,7 +78,6 @@ const main = async (): Promise<void> => {
         display_name: displayName,
         email,
         email_lower: emailLower,
-        mobile,
         role,
         status,
         tenant_id: tenantId,
@@ -88,8 +87,10 @@ const main = async (): Promise<void> => {
         fcm_tokens: [],
         must_change_password: mustChangePassword,
         ...(forcePasswordReset || !existing ? { password_hash: passwordHash } : {}),
+        ...(mobile ? { mobile } : {}),
         updated_at: new Date()
       },
+      ...(mobile ? {} : { $unset: { mobile: "" } }),
       $setOnInsert: {
         created_at: new Date()
       }

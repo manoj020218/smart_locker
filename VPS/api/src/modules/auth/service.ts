@@ -1,5 +1,5 @@
 import type { Collection, Filter, UpdateFilter, WithId } from "mongodb";
-import { randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import type { AuthRole } from "../../shared/auth.js";
 import { forbidden, unauthorized } from "../../shared/errors.js";
 import { hashPassword, verifyPassword } from "../../shared/password.js";
@@ -180,9 +180,10 @@ export const removeFcmTokenForUser = async (
 };
 
 export const buildSeedUserId = (role: AuthRole, emailOrMobile: string): string => {
-  const suffix = randomUUID().slice(0, 8);
   const prefix = role.replace(/[^a-z]/g, "").slice(0, 6) || "user";
-  const src = emailOrMobile.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
-  const compact = src.slice(-8) || suffix;
-  return `${prefix}-${compact}`;
+  const normalized = emailOrMobile.trim().toLowerCase();
+  const stemRaw = normalized.replace(/[^a-z0-9]/g, "");
+  const stem = (stemRaw.slice(0, 4) || "user").padEnd(4, "0");
+  const digest = createHash("sha1").update(normalized).digest("hex").slice(0, 8);
+  return `${prefix}-${stem}${digest}`;
 };

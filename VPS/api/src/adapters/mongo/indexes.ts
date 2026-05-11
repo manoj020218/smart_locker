@@ -2,6 +2,16 @@ import { collections } from "./client.js";
 
 export const ensureMongoIndexes = async (): Promise<void> => {
   const c = collections();
+  const authUserIndexes = await c.authUsers.indexes();
+  const mobileIndex = authUserIndexes.find((idx) => idx.name === "mobile_1");
+  const mobileIndexNeedsMigration =
+    mobileIndex && !mobileIndex.sparse;
+  if (mobileIndexNeedsMigration) {
+    await c.authUsers.dropIndex("mobile_1");
+  }
+  const unsetMobile = { $unset: { mobile: "" as const } };
+  await c.authUsers.updateMany({ mobile: null } as Record<string, unknown>, unsetMobile);
+  await c.authUsers.updateMany({ mobile: "" } as Record<string, unknown>, unsetMobile);
 
   await Promise.all([
     c.authUsers.createIndex({ user_id: 1 }, { unique: true }),
