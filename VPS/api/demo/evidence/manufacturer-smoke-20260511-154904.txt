@@ -1,0 +1,25 @@
+﻿
+> smart-cabinet-vps-api@0.1.1 smoke:manufacturer
+> tsx scripts/smoke_manufacturer_demo.ts
+
+Base URL: https://smartlocker.iotsoft.in
+1) Login OK
+2) /me OK (manufacturer_id=mfr-otsoftin)
+3) Cabinet registered (cab-demo-1778494751)
+4) Owner created (owner-owne384dac21)
+5) Owner assigned to cabinet
+6) Dashboard OK
+7) Cabinets OK
+8) Health OK
+9) Usage OK
+10) Owners list OK
+11) Register FCM token OK
+12) Remove FCM token OK
+
+Smoke test complete.
+{
+  "ok": true,
+  "manufacturer_id": "mfr-otsoftin",
+  "cabinet_id": "cab-demo-1778494751",
+  "owner_user_id": "owner-owne384dac21"
+}

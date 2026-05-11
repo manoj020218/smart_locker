@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { SmartLockerApiClient } from "../api/client";
+import { ApiError, SmartLockerApiClient } from "../api/client";
 import { LabeledInput } from "../components/LabeledInput";
 import type { AppSession, CabinetHealthRow, ManufacturerDashboardResponse, ManufacturerOwnersResponse } from "../types/api";
 
@@ -29,6 +29,13 @@ export const DashboardScreen = ({ session, onLogout }: Props): React.JSX.Element
   const [ownerPassword, setOwnerPassword] = useState("Owner#12345");
   const [assignCabinetId, setAssignCabinetId] = useState("");
 
+  const toMessage = (err: unknown, fallback: string): string => {
+    if (err instanceof ApiError && err.code === "network_error") {
+      return "Network unavailable. Check internet and retry.";
+    }
+    return err instanceof Error ? err.message : fallback;
+  };
+
   const refresh = async (): Promise<void> => {
     setLoading(true);
     setError("");
@@ -40,8 +47,9 @@ export const DashboardScreen = ({ session, onLogout }: Props): React.JSX.Element
       setOwners(o.owners);
       setFlash("Refreshed live data");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Refresh failed";
+      const message = toMessage(err, "Refresh failed");
       setError(message);
+      setHealth("Disconnected");
     } finally {
       setLoading(false);
     }
@@ -67,7 +75,7 @@ export const DashboardScreen = ({ session, onLogout }: Props): React.JSX.Element
       setFlash(`Cabinet ${id} registered`);
       await refresh();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Cabinet register failed";
+      const message = toMessage(err, "Cabinet register failed");
       setError(message);
     } finally {
       setLoading(false);
@@ -95,7 +103,7 @@ export const DashboardScreen = ({ session, onLogout }: Props): React.JSX.Element
       setFlash(`Owner created: ${created.owner_user_id}`);
       await refresh();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Owner create failed";
+      const message = toMessage(err, "Owner create failed");
       setError(message);
     } finally {
       setLoading(false);
@@ -185,7 +193,7 @@ export const DashboardScreen = ({ session, onLogout }: Props): React.JSX.Element
 const styles = StyleSheet.create({
   root: {
     paddingHorizontal: 16,
-    paddingTop: 50,
+    paddingTop: 16,
     paddingBottom: 28,
     backgroundColor: "#0a101a"
   },

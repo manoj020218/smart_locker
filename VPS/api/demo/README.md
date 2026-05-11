@@ -107,3 +107,4 @@ Expected final line:
 4. `VPS/api/scripts/smoke_manufacturer_demo.ts`
 5. `VPS/api/scripts/smoke_manufacturer_demo.ps1`
 6. `VPS/api/scripts/smoke_manufacturer_demo.sh`
+7. evidence logs in `VPS/api/demo/evidence/`

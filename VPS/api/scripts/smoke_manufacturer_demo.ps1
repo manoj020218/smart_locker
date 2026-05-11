@@ -27,8 +27,15 @@ if ($FcmToken) { $env:FCM_TOKEN = $FcmToken }
 
 Push-Location $apiRoot
 try {
-  if (Get-Command pnpm -ErrorAction SilentlyContinue) {
-    pnpm run smoke:manufacturer
+  # Sandbox-friendly HOME profile to avoid EPERM on restricted default user directory.
+  $env:USERPROFILE = $apiRoot
+  $env:HOME = $apiRoot
+  $env:APPDATA = Join-Path $apiRoot ".appdata"
+  New-Item -ItemType Directory -Force -Path $env:APPDATA | Out-Null
+
+  $npmCmd = Get-Command npm.cmd -ErrorAction SilentlyContinue
+  if ($npmCmd) {
+    & $npmCmd.Source run smoke:manufacturer
   } else {
     npm run smoke:manufacturer
   }

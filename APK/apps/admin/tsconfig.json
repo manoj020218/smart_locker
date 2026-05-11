@@ -4,6 +4,8 @@
     "module": "ESNext",
     "jsx": "react-jsx",
     "strict": true,
+    "skipLibCheck": true,
+    "lib": ["ES2020"],
     "moduleResolution": "Bundler",
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,

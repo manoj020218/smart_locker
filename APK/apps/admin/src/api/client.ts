@@ -28,8 +28,31 @@ type RequestInitExt = RequestInit & {
   token?: string;
 };
 
+type RequestPolicy = {
+  retries?: number;
+  timeoutMs?: number;
+};
+
 const toApiError = (status: number, payload: ApiErrorResponse): ApiError =>
   new ApiError(payload.message || `Request failed with status ${status}`, status, payload.error || "api_error", payload.request_id || "");
+
+const sleep = async (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+const isLikelyNetworkError = (err: unknown): boolean => {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message.toLowerCase();
+  return (
+    msg.includes("network request failed") ||
+    msg.includes("failed to fetch") ||
+    msg.includes("fetch failed") ||
+    msg.includes("networkerror") ||
+    msg.includes("timed out") ||
+    msg.includes("abort")
+  );
+};
 
 export class SmartLockerApiClient {
   readonly baseUrl: string;
@@ -44,29 +67,68 @@ export class SmartLockerApiClient {
     this.token = token;
   }
 
-  private async request<T>(path: string, init: RequestInitExt = {}): Promise<T> {
-    const headers = new Headers(init.headers || {});
-    if (!headers.has("Content-Type") && init.body !== undefined) {
-      headers.set("Content-Type", "application/json");
+  private async request<T>(path: string, init: RequestInitExt = {}, policy: RequestPolicy = {}): Promise<T> {
+    const retries = Math.max(0, policy.retries ?? 2);
+    const timeoutMs = Math.max(500, policy.timeoutMs ?? 9000);
+    let lastError: ApiError | null = null;
+
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+      const headers = new Headers(init.headers || {});
+      if (!headers.has("Content-Type") && init.body !== undefined) {
+        headers.set("Content-Type", "application/json");
+      }
+      const bearer = init.token ?? this.token;
+      if (bearer) {
+        headers.set("Authorization", `Bearer ${bearer}`);
+      }
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const response = await fetch(`${this.baseUrl}${path}`, {
+          ...init,
+          headers,
+          signal: controller.signal
+        });
+
+        const text = await response.text();
+        const json = text ? (JSON.parse(text) as T | ApiErrorResponse) : ({} as T);
+
+        if (!response.ok) {
+          const apiErr = toApiError(response.status, json as ApiErrorResponse);
+          const retryableStatus = response.status >= 500 || response.status === 429;
+          if (retryableStatus && attempt < retries) {
+            await sleep(350 * (attempt + 1));
+            continue;
+          }
+          throw apiErr;
+        }
+
+        return json as T;
+      } catch (err) {
+        if (err instanceof ApiError) {
+          lastError = err;
+          throw err;
+        }
+
+        if (isLikelyNetworkError(err) && attempt < retries) {
+          await sleep(450 * (attempt + 1));
+          continue;
+        }
+
+        const message = isLikelyNetworkError(err)
+          ? "Network unavailable or request timeout. Check internet and try again."
+          : err instanceof Error
+            ? err.message
+            : "Request failed";
+        lastError = new ApiError(message, 0, isLikelyNetworkError(err) ? "network_error" : "request_error");
+        throw lastError;
+      } finally {
+        clearTimeout(timeout);
+      }
     }
-    const bearer = init.token ?? this.token;
-    if (bearer) {
-      headers.set("Authorization", `Bearer ${bearer}`);
-    }
 
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      ...init,
-      headers
-    });
-
-    const text = await response.text();
-    const json = text ? (JSON.parse(text) as T | ApiErrorResponse) : ({} as T);
-
-    if (!response.ok) {
-      throw toApiError(response.status, json as ApiErrorResponse);
-    }
-
-    return json as T;
+    throw lastError ?? new ApiError("Request failed", 0, "request_error");
   }
 
   async health(): Promise<{ ok: boolean; service: string; ts: number }> {

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
-import { SmartLockerApiClient } from "../api/client";
+import { ApiError, SmartLockerApiClient } from "../api/client";
 import { LabeledInput } from "../components/LabeledInput";
 import { DEFAULT_API_BASE_URL } from "../config";
 import type { AppSession } from "../types/api";
@@ -38,7 +38,12 @@ export const LoginScreen = ({ onLogin }: Props): React.JSX.Element => {
       };
       onLogin(session);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Login failed";
+      const message =
+        err instanceof ApiError && err.code === "network_error"
+          ? "No internet / timeout. Check connectivity and retry."
+          : err instanceof Error
+            ? err.message
+            : "Login failed";
       setError(message);
     } finally {
       setLoading(false);

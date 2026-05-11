@@ -13,6 +13,8 @@ This is the fast-delivery Admin APK starter focused on manufacturer onboarding c
    - `POST /v1/manufacturer/owners`
    - `POST /v1/manufacturer/cabinets/:cabinetId/assign-owner`
 5. Owners + cabinets quick list panels for field demo.
+6. BLE provisioning scaffold screen with generated device bootstrap payload.
+7. API retry + timeout + offline-friendly error messaging for field network instability.
 
 ## 2) Tech Baseline
 

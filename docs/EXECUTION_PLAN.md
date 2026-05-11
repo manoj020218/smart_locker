@@ -239,6 +239,12 @@ Assessment source: all repository Markdown files + current implementation files 
 18. Admin APK Phase-1 execution is started in code:
    - Expo-managed RN starter with token session persistence
    - live API wiring for login, dashboard, cabinet register, owner create/assign
+19. Manufacturer live smoke evidence is now captured in repo:
+   - evidence summary: `VPS/api/demo/evidence/2026-05-11-manufacturer-smoke-evidence.md`
+   - raw operator log: `VPS/api/demo/evidence/manufacturer-smoke-20260511-154904.log`
+20. Admin APK Phase-1 is extended with next fast-delivery slice:
+   - BLE provisioning scaffold screen + generated payload preview
+   - API retry/timeout/network-aware UX for unstable connectivity
 
 ### Left
 
@@ -246,7 +252,7 @@ Assessment source: all repository Markdown files + current implementation files 
 2. Continue Admin APK from current starter to full MVP:
    - add BLE onboarding/provision flow
    - add users/rules/drawer management screens
-   - add deeper role/tenant guard and retry UX
+   - add deeper role/tenant guard, connection banner, and queued action UX
 3. Add automated tests:
    - EDGE unit tests (CRC/parser/rule decisions)
    - VPS route + auth integration tests
