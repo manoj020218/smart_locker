@@ -2,12 +2,13 @@ import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { BleProvisionScreen } from "./src/screens/BleProvisionScreen";
+import { CabinetAdminScreen } from "./src/screens/CabinetAdminScreen";
 import { DashboardScreen } from "./src/screens/DashboardScreen";
 import { LoginScreen } from "./src/screens/LoginScreen";
 import { clearSession, loadSession, saveSession } from "./src/storage/session";
 import type { AppSession } from "./src/types/api";
 
-type AppTab = "dashboard" | "ble";
+type AppTab = "dashboard" | "ble" | "cabinet_admin";
 
 export default function App(): React.JSX.Element {
   const [booting, setBooting] = useState(true);
@@ -54,8 +55,17 @@ export default function App(): React.JSX.Element {
             <Pressable style={[styles.tab, tab === "ble" && styles.tabActive]} onPress={() => setTab("ble")}>
               <Text style={[styles.tabText, tab === "ble" && styles.tabTextActive]}>BLE Provision</Text>
             </Pressable>
+            <Pressable style={[styles.tab, tab === "cabinet_admin" && styles.tabActive]} onPress={() => setTab("cabinet_admin")}>
+              <Text style={[styles.tabText, tab === "cabinet_admin" && styles.tabTextActive]}>Cabinet Admin</Text>
+            </Pressable>
           </View>
-          {tab === "dashboard" ? <DashboardScreen session={session} onLogout={handleLogout} /> : <BleProvisionScreen session={session} />}
+          {tab === "dashboard" ? (
+            <DashboardScreen session={session} onLogout={handleLogout} />
+          ) : tab === "ble" ? (
+            <BleProvisionScreen session={session} />
+          ) : (
+            <CabinetAdminScreen session={session} />
+          )}
         </View>
       ) : (
         <LoginScreen onLogin={handleLogin} />

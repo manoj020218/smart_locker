@@ -104,3 +104,108 @@ export type AppSession = {
   manufacturerId: string;
   tenantId: string;
 };
+
+export type AdminUser = {
+  user_id: string;
+  tenant_id: string;
+  cabinet_id: string;
+  display_name: string;
+  card_id?: string;
+  face_id?: string;
+  drawer_id?: number | null;
+  valid_from?: number;
+  valid_to?: number;
+  payment_required?: boolean;
+};
+
+export type AdminRule = {
+  rule_id: string;
+  tenant_id: string;
+  cabinet_id: string;
+  user_id: string;
+  drawer_id: number;
+  valid_from: number;
+  valid_to: number;
+  cooldown_sec: number;
+  payment_required: boolean;
+};
+
+export type AdminDrawer = {
+  tenant_id: string;
+  cabinet_id: string;
+  drawer_id: number;
+  board_address: number;
+  lock_address: number;
+  label?: string;
+};
+
+export type AdminListResponse<T> = {
+  ok: boolean;
+  tenant_id: string;
+  cabinet_id: string;
+} & T;
+
+export type UpsertAdminUserPayload = {
+  tenant_id: string;
+  cabinet_id: string;
+  user_id?: string;
+  display_name: string;
+  card_id?: string;
+  face_id?: string;
+  drawer_id?: number;
+  valid_from?: number;
+  valid_to?: number;
+  payment_required?: boolean;
+};
+
+export type UpdateAdminUserPayload = {
+  tenant_id: string;
+  cabinet_id: string;
+  display_name?: string;
+  card_id?: string;
+  face_id?: string;
+  drawer_id?: number | null;
+  valid_from?: number;
+  valid_to?: number;
+  payment_required?: boolean;
+};
+
+export type UpsertAdminRulePayload = {
+  tenant_id: string;
+  cabinet_id: string;
+  rule_id?: string;
+  user_id: string;
+  drawer_id: number;
+  valid_from?: number;
+  valid_to?: number;
+  cooldown_sec?: number;
+  payment_required?: boolean;
+};
+
+export type UpdateAdminRulePayload = {
+  tenant_id: string;
+  cabinet_id: string;
+  user_id?: string;
+  drawer_id?: number;
+  valid_from?: number;
+  valid_to?: number;
+  cooldown_sec?: number;
+  payment_required?: boolean;
+};
+
+export type UpsertAdminDrawerPayload = {
+  tenant_id: string;
+  cabinet_id: string;
+  drawer_id: number;
+  board_address: number;
+  lock_address: number;
+  label?: string;
+};
+
+export type UpdateAdminDrawerPayload = {
+  tenant_id: string;
+  cabinet_id: string;
+  board_address?: number;
+  lock_address?: number;
+  label?: string;
+};

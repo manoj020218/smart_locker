@@ -1,4 +1,8 @@
 import type {
+  AdminDrawer,
+  AdminListResponse,
+  AdminRule,
+  AdminUser,
   ApiErrorResponse,
   AuthLoginResponse,
   AuthProfile,
@@ -6,7 +10,13 @@ import type {
   ManufacturerCabinetsResponse,
   ManufacturerDashboardResponse,
   ManufacturerOwnersResponse,
-  RegisterCabinetPayload
+  RegisterCabinetPayload,
+  UpdateAdminDrawerPayload,
+  UpdateAdminRulePayload,
+  UpdateAdminUserPayload,
+  UpsertAdminDrawerPayload,
+  UpsertAdminRulePayload,
+  UpsertAdminUserPayload
 } from "../types/api";
 
 export class ApiError extends Error {
@@ -185,5 +195,67 @@ export class SmartLockerApiClient {
       method: "POST",
       body: JSON.stringify({ owner_user_id: ownerUserId })
     });
+  }
+
+  async listAdminUsers(tenantId: string, cabinetId: string): Promise<AdminListResponse<{ users: AdminUser[] }>> {
+    const q = new URLSearchParams({ tenant_id: tenantId, cabinet_id: cabinetId });
+    return this.request(`/v1/admin/users?${q.toString()}`, { method: "GET" });
+  }
+
+  async createAdminUser(payload: UpsertAdminUserPayload): Promise<{ ok: boolean; user_id: string; config_version: number }> {
+    return this.request("/v1/admin/users", { method: "POST", body: JSON.stringify(payload) });
+  }
+
+  async updateAdminUser(userId: string, payload: UpdateAdminUserPayload): Promise<{ ok: boolean; user_id: string; config_version: number }> {
+    return this.request(`/v1/admin/users/${encodeURIComponent(userId)}`, { method: "PUT", body: JSON.stringify(payload) });
+  }
+
+  async deleteAdminUser(userId: string, tenantId: string, cabinetId: string): Promise<{ ok: boolean; user_id: string; config_version: number }> {
+    const q = new URLSearchParams({ tenant_id: tenantId, cabinet_id: cabinetId });
+    return this.request(`/v1/admin/users/${encodeURIComponent(userId)}?${q.toString()}`, { method: "DELETE" });
+  }
+
+  async listAdminRules(tenantId: string, cabinetId: string): Promise<AdminListResponse<{ rules: AdminRule[] }>> {
+    const q = new URLSearchParams({ tenant_id: tenantId, cabinet_id: cabinetId });
+    return this.request(`/v1/admin/rules?${q.toString()}`, { method: "GET" });
+  }
+
+  async createAdminRule(payload: UpsertAdminRulePayload): Promise<{ ok: boolean; rule_id: string; config_version: number }> {
+    return this.request("/v1/admin/rules", { method: "POST", body: JSON.stringify(payload) });
+  }
+
+  async updateAdminRule(ruleId: string, payload: UpdateAdminRulePayload): Promise<{ ok: boolean; rule_id: string; config_version: number }> {
+    return this.request(`/v1/admin/rules/${encodeURIComponent(ruleId)}`, { method: "PUT", body: JSON.stringify(payload) });
+  }
+
+  async deleteAdminRule(ruleId: string, tenantId: string, cabinetId: string): Promise<{ ok: boolean; rule_id: string; config_version: number }> {
+    const q = new URLSearchParams({ tenant_id: tenantId, cabinet_id: cabinetId });
+    return this.request(`/v1/admin/rules/${encodeURIComponent(ruleId)}?${q.toString()}`, { method: "DELETE" });
+  }
+
+  async listAdminDrawers(tenantId: string, cabinetId: string): Promise<AdminListResponse<{ drawers: AdminDrawer[] }>> {
+    const q = new URLSearchParams({ tenant_id: tenantId, cabinet_id: cabinetId });
+    return this.request(`/v1/admin/drawers?${q.toString()}`, { method: "GET" });
+  }
+
+  async createAdminDrawer(payload: UpsertAdminDrawerPayload): Promise<{ ok: boolean; drawer_id: number; config_version: number }> {
+    return this.request("/v1/admin/drawers/map", { method: "POST", body: JSON.stringify(payload) });
+  }
+
+  async updateAdminDrawer(drawerId: number, payload: UpdateAdminDrawerPayload): Promise<{ ok: boolean; drawer_id: number; config_version: number }> {
+    return this.request(`/v1/admin/drawers/${encodeURIComponent(String(drawerId))}`, { method: "PUT", body: JSON.stringify(payload) });
+  }
+
+  async deleteAdminDrawer(drawerId: number, tenantId: string, cabinetId: string): Promise<{ ok: boolean; drawer_id: number; config_version: number }> {
+    const q = new URLSearchParams({ tenant_id: tenantId, cabinet_id: cabinetId });
+    return this.request(`/v1/admin/drawers/${encodeURIComponent(String(drawerId))}?${q.toString()}`, { method: "DELETE" });
+  }
+
+  async fetchAdminCabinetConfig(
+    tenantId: string,
+    cabinetId: string
+  ): Promise<{ ok: boolean; tenant_id: string; cabinet_id: string; config_version: number; users: AdminUser[]; rules: AdminRule[]; drawers: AdminDrawer[] }> {
+    const q = new URLSearchParams({ tenant_id: tenantId, cabinet_id: cabinetId });
+    return this.request(`/v1/admin/cabinet/config?${q.toString()}`, { method: "GET" });
   }
 }

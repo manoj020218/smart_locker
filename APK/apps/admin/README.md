@@ -13,8 +13,9 @@ This is the fast-delivery Admin APK starter focused on manufacturer onboarding c
    - `POST /v1/manufacturer/owners`
    - `POST /v1/manufacturer/cabinets/:cabinetId/assign-owner`
 5. Owners + cabinets quick list panels for field demo.
-6. BLE provisioning scaffold screen with generated device bootstrap payload.
-7. API retry + timeout + offline-friendly error messaging for field network instability.
+6. BLE live integration points (scan -> connect -> write characteristic) with generated bootstrap payload.
+7. Cabinet Admin tab for users/rules/drawers list/create/edit/delete using `/v1/admin/*`.
+8. API retry + timeout + offline-friendly error messaging for field network instability.
 
 ## 2) Tech Baseline
 
@@ -44,6 +45,6 @@ npm run android
 
 ## 5) Immediate Next Phase (already planned)
 
-1. Add users/rules/drawer admin screens once corresponding read/list/delete APIs are finalized.
-2. Add BLE provisioning screen module.
-3. Add role-based guards and audit trail views.
+1. Freeze production BLE service/characteristic UUID contract with firmware and complete real-device validation checklist.
+2. Add role-based guards and audit trail views.
+3. Add queued/offline action UX for unstable field connectivity.

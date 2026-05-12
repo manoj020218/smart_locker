@@ -152,7 +152,9 @@ Assessment source: all repository Markdown files + current implementation files 
 2. Admin mobile app (BLE provisioning + user/rule config): `IN PROGRESS`
    - Admin app Phase-1 starter is now added under `APK/apps/admin`.
    - Credential login + manufacturer dashboard + cabinet register + owner create/assign screens are implemented.
-   - BLE provisioning and admin users/rules/drawer lifecycle screens are still pending.
+   - BLE live scan/connect/write integration points are implemented in app code.
+   - Users/rules/drawers lifecycle screens (list/create/edit/delete) are implemented in APK against `/v1/admin/*`.
+   - Remaining on this track: finalize BLE UUID contract with firmware and capture device-side evidence.
 3. Minimal VPS (license/config sync/logs/OTA manifest): `DONE (baseline)`
    - Core API routes are implemented and wired in Express.
    - Mongo collections and indexes are implemented.
@@ -243,16 +245,17 @@ Assessment source: all repository Markdown files + current implementation files 
    - evidence summary: `VPS/api/demo/evidence/2026-05-11-manufacturer-smoke-evidence.md`
    - raw operator log: `VPS/api/demo/evidence/manufacturer-smoke-20260511-154904.log`
 20. Admin APK Phase-1 is extended with next fast-delivery slice:
-   - BLE provisioning scaffold screen + generated payload preview
+   - BLE provisioning screen now uses native scan/connect/write integration points with progress/error handling
+   - Cabinet Admin screen now supports users/rules/drawers list/create/edit/delete flows
    - API retry/timeout/network-aware UX for unstable connectivity
 
 ### Left
 
 1. Complete EDGE <-> VPS sync evidence pack (outage/recovery, drift scenarios, log push with real transactions, and soak logs).
 2. Continue Admin APK from current starter to full MVP:
-   - add BLE onboarding/provision flow
-   - add users/rules/drawer management screens
+   - finalize BLE service/characteristic UUID contract and prove real-device provisioning evidence
    - add deeper role/tenant guard, connection banner, and queued action UX
+   - add admin audit/history visibility for field support
 3. Add automated tests:
    - EDGE unit tests (CRC/parser/rule decisions)
    - VPS route + auth integration tests
@@ -290,8 +293,8 @@ Precondition:
 1. Dedicated APK plan approval (`APK/docs/ADMIN_APK_EXECUTION_PLAN.md`).
 
 1. Create RN app shell and auth bootstrap.
-2. Implement BLE scan/connect/provision flow.
-3. Implement user/rule/drawer management screens mapped to VPS APIs.
+2. Implement BLE scan/connect/provision flow. `DONE (integration points in APK)`
+3. Implement user/rule/drawer management screens mapped to VPS APIs. `DONE`
 4. Add APK release publish/check workflow using existing VPS endpoints.
 
 Exit criteria:

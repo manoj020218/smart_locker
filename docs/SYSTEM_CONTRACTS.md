@@ -1,7 +1,7 @@
 ﻿# System Contracts
 
 Last updated: 2026-05-11
-Contract version: 0.1.10
+Contract version: 0.1.11
 
 ## 1) Contract Principles
 
@@ -169,8 +169,18 @@ Retention baseline:
 - `GET /v1/device/:id/license`
 - `GET /v1/device/:id/ota/manifest`
 - `POST /v1/admin/users`
+- `GET /v1/admin/users?tenant_id=&cabinet_id=`
+- `PUT /v1/admin/users/:user_id`
+- `DELETE /v1/admin/users/:user_id?tenant_id=&cabinet_id=`
 - `POST /v1/admin/rules`
+- `GET /v1/admin/rules?tenant_id=&cabinet_id=`
+- `PUT /v1/admin/rules/:rule_id`
+- `DELETE /v1/admin/rules/:rule_id?tenant_id=&cabinet_id=`
 - `POST /v1/admin/drawers/map`
+- `GET /v1/admin/drawers?tenant_id=&cabinet_id=`
+- `PUT /v1/admin/drawers/:drawer_id`
+- `DELETE /v1/admin/drawers/:drawer_id?tenant_id=&cabinet_id=`
+- `GET /v1/admin/cabinet/config?tenant_id=&cabinet_id=`
 - `GET /v1/manufacturer/dashboard`
 - `GET /v1/manufacturer/cabinets`
 - `GET /v1/manufacturer/health`
@@ -311,3 +321,14 @@ Additive only (non-breaking):
    - `GET /v1/manufacturer/health`
    - `GET /v1/manufacturer/usage`
    - `GET /v1/manufacturer/owners`
+
+### 0.1.10 -> 0.1.11
+
+Additive only (non-breaking):
+
+1. Added admin CRUD/read endpoints for cabinet configuration:
+   - `GET/PUT/DELETE /v1/admin/users`
+   - `GET/PUT/DELETE /v1/admin/rules`
+   - `GET/PUT/DELETE /v1/admin/drawers`
+   - `GET /v1/admin/cabinet/config`
+2. Expanded `/v1/admin/*` access path to allow manufacturer role with cabinet ownership scope validation.
