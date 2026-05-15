@@ -5,15 +5,26 @@
     "jsx": "react-jsx",
     "strict": true,
     "skipLibCheck": true,
-    "lib": ["ES2020"],
+    "lib": [
+      "ES2020"
+    ],
     "moduleResolution": "Bundler",
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
-    "types": ["react", "react-native"],
+    "types": [
+      "react",
+      "react-native"
+    ],
     "baseUrl": ".",
     "paths": {
-      "@src/*": ["src/*"]
+      "@src/*": [
+        "src/*"
+      ]
     }
   },
-  "include": ["App.tsx", "src/**/*"]
+  "include": [
+    "App.tsx",
+    "src/**/*"
+  ],
+  "extends": "expo/tsconfig.base"
 }

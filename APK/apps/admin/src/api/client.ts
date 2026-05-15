@@ -11,6 +11,7 @@ import type {
   ManufacturerDashboardResponse,
   ManufacturerOwnersResponse,
   RegisterCabinetPayload,
+  UpdateOwnerPayload,
   UpdateAdminDrawerPayload,
   UpdateAdminRulePayload,
   UpdateAdminUserPayload,
@@ -183,10 +184,32 @@ export class SmartLockerApiClient {
     });
   }
 
+  async deleteCabinet(cabinetId: string): Promise<{ ok: boolean; cabinet_id: string }> {
+    return this.request<{ ok: boolean; cabinet_id: string }>(`/v1/manufacturer/cabinets/${encodeURIComponent(cabinetId)}`, {
+      method: "DELETE"
+    });
+  }
+
   async createOwner(payload: CreateOwnerPayload): Promise<{ ok: boolean; owner_user_id: string }> {
     return this.request<{ ok: boolean; owner_user_id: string }>("/v1/manufacturer/owners", {
       method: "POST",
       body: JSON.stringify(payload)
+    });
+  }
+
+  async updateOwner(ownerUserId: string, payload: UpdateOwnerPayload): Promise<{ ok: boolean; owner_user_id: string; assigned_cabinets: string[] }> {
+    return this.request<{ ok: boolean; owner_user_id: string; assigned_cabinets: string[] }>(
+      `/v1/manufacturer/owners/${encodeURIComponent(ownerUserId)}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(payload)
+      }
+    );
+  }
+
+  async deleteOwner(ownerUserId: string): Promise<{ ok: boolean; owner_user_id: string }> {
+    return this.request<{ ok: boolean; owner_user_id: string }>(`/v1/manufacturer/owners/${encodeURIComponent(ownerUserId)}`, {
+      method: "DELETE"
     });
   }
 

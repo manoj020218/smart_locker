@@ -29,12 +29,18 @@ export const LoginScreen = ({ onLogin }: Props): React.JSX.Element => {
       const login = await client.login(identifier.trim(), password);
       client.setToken(login.token);
       const me = await client.me();
+      const permissions = login.permissions ?? login.allowed_permissions ?? [];
       const session: AppSession = {
         baseUrl: client.baseUrl,
         token: login.token,
         identifier: identifier.trim(),
         manufacturerId: me.profile.manufacturer_id,
-        tenantId: me.profile.tenant_id
+        tenantId: me.profile.tenant_id,
+        role: me.profile.role,
+        permissions,
+        cabinetIds: me.profile.cabinet_ids ?? [],
+        ownerId: me.profile.owner_id ?? "",
+        displayName: me.profile.display_name ?? ""
       };
       onLogin(session);
     } catch (err) {
@@ -53,7 +59,7 @@ export const LoginScreen = ({ onLogin }: Props): React.JSX.Element => {
   return (
     <View style={styles.root}>
       <Text style={styles.title}>Smart Cabinet Admin</Text>
-      <Text style={styles.subtitle}>Manufacturer Credential Login</Text>
+      <Text style={styles.subtitle}>Role-based credential login</Text>
 
       <LabeledInput label="API Base URL" value={baseUrl} onChangeText={setBaseUrl} placeholder="https://smartlocker.iotsoft.in" />
       <LabeledInput label="Identifier (Email/Mobile)" value={identifier} onChangeText={setIdentifier} placeholder="mfr@example.com" />

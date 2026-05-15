@@ -6,6 +6,7 @@ import type { AdminDrawer, AdminRule, AdminUser, AppSession } from "../types/api
 
 type Props = {
   session: AppSession;
+  onSessionInvalid: () => void;
 };
 
 type UserForm = {
@@ -79,10 +80,12 @@ const asRequiredPositiveInt = (value: string): number => {
   return num;
 };
 
-export const CabinetAdminScreen = ({ session }: Props): React.JSX.Element => {
+export const CabinetAdminScreen = ({ session, onSessionInvalid }: Props): React.JSX.Element => {
   const client = useMemo(() => new SmartLockerApiClient(session.baseUrl, session.token), [session.baseUrl, session.token]);
+  const role = (session.role ?? "").trim().toLowerCase();
+  const roleCanUseAdminApi = ["admin", "cabinet_admin", "super_admin", "manufacturer"].includes(role);
   const [tenantId, setTenantId] = useState(session.tenantId || "");
-  const [cabinetId, setCabinetId] = useState("");
+  const [cabinetId, setCabinetId] = useState((session.cabinetIds?.[0] ?? "").trim());
   const [configVersion, setConfigVersion] = useState(0);
 
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -102,6 +105,17 @@ export const CabinetAdminScreen = ({ session }: Props): React.JSX.Element => {
   const toMessage = (err: unknown, fallback: string): string => {
     if (err instanceof ApiError && err.code === "network_error") {
       return "Network unavailable. Check internet and retry.";
+    }
+    if (err instanceof ApiError && err.status === 401) {
+      onSessionInvalid();
+      return "Session expired or invalid bearer token. Please login again.";
+    }
+    if (err instanceof ApiError && err.status === 403) {
+      if ((err.message || "").toLowerCase().includes("insufficient role permission")) {
+        const role = session.role?.trim() || "unknown";
+        return `403: ${err.message}. Logged role="${role}". Please login with admin/cabinet_admin credentials for Cabinet Admin tab.`;
+      }
+      return `403: ${err.message}`;
     }
     return err instanceof Error ? err.message : fallback;
   };
@@ -383,6 +397,7 @@ export const CabinetAdminScreen = ({ session }: Props): React.JSX.Element => {
       <View style={styles.section}>
         <Text style={styles.title}>Cabinet Admin</Text>
         <Text style={styles.meta}>API: {session.baseUrl}</Text>
+        <Text style={styles.meta}>Role: {session.role || "-"}</Text>
         <Text style={styles.meta}>Tenant: {tenantId || "-"}</Text>
         <Text style={styles.meta}>Cabinet: {cabinetId || "-"}</Text>
         <Text style={styles.meta}>Config Version: {configVersion}</Text>
@@ -390,6 +405,12 @@ export const CabinetAdminScreen = ({ session }: Props): React.JSX.Element => {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Cabinet Scope</Text>
+        <Text style={styles.helperText}>
+          Select the target tenant + cabinet first. All load/save actions below will apply only to this selected cabinet.
+        </Text>
+        {!roleCanUseAdminApi ? (
+          <Text style={styles.warnText}>Current role may not access Admin APIs. Please use admin/cabinet_admin login.</Text>
+        ) : null}
         <LabeledInput label="Tenant ID" value={tenantId} onChangeText={setTenantId} placeholder="tenant-001" />
         <LabeledInput label="Cabinet ID" value={cabinetId} onChangeText={setCabinetId} placeholder="cab-1001" />
         <Pressable style={styles.primaryButton} disabled={busy} onPress={loadConfig}>
@@ -401,6 +422,9 @@ export const CabinetAdminScreen = ({ session }: Props): React.JSX.Element => {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Users ({users.length})</Text>
+        <Text style={styles.helperText}>
+          Create or update cabinet users here. Each user can be mapped to card/face and optionally pinned to a fixed drawer.
+        </Text>
         <LabeledInput label="User ID (optional for create)" value={userForm.userId} onChangeText={(v) => setUserForm((s) => ({ ...s, userId: v }))} />
         <LabeledInput label="Display Name" value={userForm.displayName} onChangeText={(v) => setUserForm((s) => ({ ...s, displayName: v }))} />
         <LabeledInput label="Card ID" value={userForm.cardId} onChangeText={(v) => setUserForm((s) => ({ ...s, cardId: v }))} />
@@ -446,6 +470,9 @@ export const CabinetAdminScreen = ({ session }: Props): React.JSX.Element => {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Rules ({rules.length})</Text>
+        <Text style={styles.helperText}>
+          Rules define who can open which drawer, with validity window, cooldown, and payment requirement controls.
+        </Text>
         <LabeledInput label="Rule ID (optional for create)" value={ruleForm.ruleId} onChangeText={(v) => setRuleForm((s) => ({ ...s, ruleId: v }))} />
         <LabeledInput label="User ID" value={ruleForm.userId} onChangeText={(v) => setRuleForm((s) => ({ ...s, userId: v }))} />
         <LabeledInput label="Drawer ID" value={ruleForm.drawerId} onChangeText={(v) => setRuleForm((s) => ({ ...s, drawerId: v }))} />
@@ -492,6 +519,9 @@ export const CabinetAdminScreen = ({ session }: Props): React.JSX.Element => {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Drawers ({drawers.length})</Text>
+        <Text style={styles.helperText}>
+          Drawer mapping links logical drawer IDs to hardware board/lock addresses used by the edge controller.
+        </Text>
         <LabeledInput label="Drawer ID" value={drawerForm.drawerId} onChangeText={(v) => setDrawerForm((s) => ({ ...s, drawerId: v }))} />
         <LabeledInput
           label="Board Address"
@@ -562,6 +592,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginBottom: 3
   },
+  helperText: {
+    color: "#9ab2d7",
+    fontSize: 12,
+    marginTop: -2,
+    marginBottom: 10,
+    lineHeight: 16
+  },
   primaryButton: {
     borderRadius: 10,
     backgroundColor: "#1f8f5e",
@@ -604,6 +641,10 @@ const styles = StyleSheet.create({
   errText: {
     color: "#ff9e9e",
     marginTop: 8
+  },
+  warnText: {
+    color: "#ffcf8a",
+    marginBottom: 8
   },
   toggleRow: {
     flexDirection: "row",
@@ -681,4 +722,3 @@ const styles = StyleSheet.create({
     fontSize: 12
   }
 });
-

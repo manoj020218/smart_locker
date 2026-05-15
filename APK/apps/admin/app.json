@@ -18,6 +18,7 @@
     "android": {
       "package": "in.iotsoft.smartcabinet.admin",
       "versionCode": 1,
+      "usesCleartextTraffic": true,
       "permissions": [
         "BLUETOOTH",
         "BLUETOOTH_ADMIN",

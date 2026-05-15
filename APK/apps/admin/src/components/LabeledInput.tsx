@@ -8,6 +8,9 @@ type Props = {
   placeholder?: string;
   secureTextEntry?: boolean;
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
+  editable?: boolean;
+  hasError?: boolean;
+  helperText?: string;
 };
 
 export const LabeledInput = ({
@@ -16,7 +19,10 @@ export const LabeledInput = ({
   onChangeText,
   placeholder,
   secureTextEntry,
-  autoCapitalize = "none"
+  autoCapitalize = "none",
+  editable = true,
+  hasError = false,
+  helperText = ""
 }: Props): React.JSX.Element => (
   <View style={styles.wrap}>
     <Text style={styles.label}>{label}</Text>
@@ -27,8 +33,10 @@ export const LabeledInput = ({
       placeholderTextColor="#7f8a9a"
       secureTextEntry={secureTextEntry}
       autoCapitalize={autoCapitalize}
-      style={styles.input}
+      editable={editable}
+      style={[styles.input, !editable && styles.inputReadonly, hasError && styles.inputError]}
     />
+    {helperText ? <Text style={[styles.helperText, hasError && styles.helperTextError]}>{helperText}</Text> : null}
   </View>
 );
 
@@ -50,5 +58,21 @@ const styles = StyleSheet.create({
     color: "#eef4ff",
     paddingHorizontal: 12,
     paddingVertical: 10
+  },
+  inputReadonly: {
+    borderColor: "#2c8a62",
+    backgroundColor: "#12281f",
+    color: "#dcffe8"
+  },
+  inputError: {
+    borderColor: "#d85656"
+  },
+  helperText: {
+    color: "#90a4c6",
+    fontSize: 11,
+    marginTop: 4
+  },
+  helperTextError: {
+    color: "#ff9e9e"
   }
 });

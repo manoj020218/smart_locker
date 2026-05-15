@@ -1,5 +1,8 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <BLEAdvertising.h>
+#include <BLEDevice.h>
+#include <BLEServer.h>
 #include <ESPmDNS.h>
 #include <HTTPClient.h>
 #include <Preferences.h>
@@ -9,8 +12,11 @@
 #include <ctype.h>
 #include <esp_err.h>
 #include <esp_heap_caps.h>
+#include <esp_mac.h>
 #include <esp_system.h>
+#include <mbedtls/base64.h>
 #include <nvs_flash.h>
+#include <string.h>
 #include <time.h>
 
 #include "device_config.h"
@@ -27,6 +33,7 @@ constexpr uint8_t kRecentEventsCap = 20;
 constexpr uint16_t kTxEventsCap = 100;
 constexpr uint8_t kMaxBoards = 16;
 constexpr uint8_t kMaxBoardBytes = 6;
+constexpr uint8_t kMaxLocksPerCard = 24;
 
 struct CabinetMeta {
     char cabinetId2d[3] = "01";
@@ -34,6 +41,8 @@ struct CabinetMeta {
     char location[48] = "LAN";
     uint8_t drawerCount = 24;
     uint8_t boardAddr = 0;
+    uint8_t controlCards = 1;
+    uint8_t locksPerCard = 24;
 };
 
 struct OpsMode {
@@ -42,7 +51,7 @@ struct OpsMode {
     uint8_t fixedDrawerId = 1;
     char identityMode[20] = "phone_otp";
     char wgAccessMode[20] = "free_card";
-    char lockerIntent[12] = "put";
+    char lockerIntent[12] = "auto";
     uint8_t allowUsesType = 1;
 };
 
@@ -110,6 +119,9 @@ OpsMode gOpsMode;
 Preferences gPrefs;
 LocalPolicyStore gPolicyStore;
 RuleEngine gRuleEngine;
+uint8_t gDetectedBoards[kMaxBoards] = {0};
+uint8_t gDetectedBoardCount = 0;
+uint32_t gDetectedBoardScanMs = 0;
 
 char gLastDecisionCard[48] = {0};
 char gLastDecisionRaw[48] = {0};
@@ -135,6 +147,35 @@ constexpr const char* kPolicyPrefsNs = "policydb";
 constexpr uint32_t kReplayWindowMs = 1500U;
 constexpr uint32_t kHeapCheckPeriodMs = 2000U;
 constexpr uint32_t kSyncLoopTickMs = 250U;
+constexpr uint8_t kMacSuffixLen = 6;
+constexpr uint8_t kWifiSsidMaxLen = 32;
+constexpr uint8_t kWifiPasswordMaxLen = 64;
+constexpr const char* kBleNamePrefix = "JNX-SLK";
+constexpr const char* kApSsidPrefix = "JNX_SLK";
+constexpr const char* kApPassword = AP_FALLBACK_PASSWORD;
+constexpr const char* kBleProvisionServiceUuid = "0000ff00-0000-1000-8000-00805f9b34fb";
+constexpr const char* kBleProvisionCharacteristicUuid = "0000ff01-0000-1000-8000-00805f9b34fb";
+
+char gMacSuffix[kMacSuffixLen + 1] = "000000";
+char gBleBroadcastName[32] = "JNX-SLK000000";
+char gApFallbackSsid[32] = "JNX_SLK000000";
+char gProvisionedWifiSsid[kWifiSsidMaxLen + 1] = {0};
+char gProvisionedWifiPassword[kWifiPasswordMaxLen + 1] = {0};
+char gPendingWifiSsid[kWifiSsidMaxLen + 1] = {0};
+char gPendingWifiPassword[kWifiPasswordMaxLen + 1] = {0};
+volatile bool gHasPendingWifiProvision = false;
+
+BLEServer* gBleServer = nullptr;
+BLEService* gBleProvisionService = nullptr;
+BLECharacteristic* gBleProvisionCharacteristic = nullptr;
+
+uint8_t effectiveLocksPerCard();
+uint8_t effectiveControlCards();
+uint16_t configuredMaxLockers();
+uint16_t supportedMaxLockers();
+void clampDrawerCountToSupportedRange();
+bool deriveBoardLockFromDrawerId(uint16_t drawerId, uint8_t& board, uint8_t& lockAddr);
+bool applyDefaultDrawerMappings(uint16_t drawerCount);
 
 #ifndef ENABLE_HEAP_GUARD
 #define ENABLE_HEAP_GUARD 1
@@ -157,6 +198,146 @@ bool ensureNvsReady() {
         return false;
     }
     return true;
+}
+
+void initDeviceIdentityFromMac() {
+    uint8_t staMac[6] = {0};
+    const esp_err_t err = esp_read_mac(staMac, ESP_MAC_WIFI_STA);
+    if (err != ESP_OK) {
+        Serial.printf("[ID] Failed to read STA MAC (%s), using fallback suffix 000000\n", esp_err_to_name(err));
+        snprintf(gMacSuffix, sizeof(gMacSuffix), "000000");
+    } else {
+        snprintf(gMacSuffix, sizeof(gMacSuffix), "%02X%02X%02X", staMac[3], staMac[4], staMac[5]);
+        Serial.printf("[ID] STA MAC: %02X:%02X:%02X:%02X:%02X:%02X\n", staMac[0], staMac[1], staMac[2], staMac[3],
+                      staMac[4], staMac[5]);
+    }
+
+    snprintf(gBleBroadcastName, sizeof(gBleBroadcastName), "%s%s", kBleNamePrefix, gMacSuffix);
+    snprintf(gApFallbackSsid, sizeof(gApFallbackSsid), "%s%s", kApSsidPrefix, gMacSuffix);
+    Serial.printf("[ID] BLE=%s | AP=%s\n", gBleBroadcastName, gApFallbackSsid);
+}
+
+void copyStringTruncated(char* out, size_t outLen, const String& in) {
+    if (outLen == 0) {
+        return;
+    }
+    const size_t take = in.length() < (outLen - 1) ? in.length() : (outLen - 1);
+    memcpy(out, in.c_str(), take);
+    out[take] = '\0';
+}
+
+bool decodeBase64Payload(const String& encoded, String& decoded) {
+    size_t requiredLen = 0;
+    const int probe = mbedtls_base64_decode(nullptr, 0, &requiredLen, reinterpret_cast<const unsigned char*>(encoded.c_str()),
+                                            encoded.length());
+    if (probe != 0 && probe != MBEDTLS_ERR_BASE64_BUFFER_TOO_SMALL) {
+        Serial.printf("[BLE] base64 probe failed: %d\n", probe);
+        return false;
+    }
+
+    if (requiredLen == 0) {
+        decoded = "";
+        return true;
+    }
+
+    auto* buf = static_cast<unsigned char*>(malloc(requiredLen + 1));
+    if (buf == nullptr) {
+        Serial.println("[BLE] base64 decode allocation failed");
+        return false;
+    }
+
+    size_t written = 0;
+    const int rc = mbedtls_base64_decode(buf, requiredLen, &written, reinterpret_cast<const unsigned char*>(encoded.c_str()),
+                                         encoded.length());
+    if (rc != 0) {
+        Serial.printf("[BLE] base64 decode failed: %d\n", rc);
+        free(buf);
+        return false;
+    }
+
+    buf[written] = '\0';
+    decoded = String(reinterpret_cast<const char*>(buf));
+    free(buf);
+    return true;
+}
+
+void queueProvisionedWifi(const String& ssid, const String& password) {
+    copyStringTruncated(gPendingWifiSsid, sizeof(gPendingWifiSsid), ssid);
+    copyStringTruncated(gPendingWifiPassword, sizeof(gPendingWifiPassword), password);
+    gHasPendingWifiProvision = true;
+}
+
+void handleBleProvisionWrite(const String& encodedPayload) {
+    String decodedPayload;
+    if (!decodeBase64Payload(encodedPayload, decodedPayload)) {
+        Serial.println("[BLE] Provision payload decode failed");
+        return;
+    }
+
+    JsonDocument doc;
+    const DeserializationError err = deserializeJson(doc, decodedPayload);
+    if (err) {
+        Serial.printf("[BLE] Provision payload JSON parse failed: %s\n", err.c_str());
+        return;
+    }
+
+    const String ssid = String(doc["wifi"]["ssid"] | "");
+    const String password = String(doc["wifi"]["password"] | "");
+    const String deviceId = String(doc["device_register"]["device_id"] | "");
+    const String cabinetId = String(doc["device_register"]["cabinet_id"] | "");
+    const String tenantId = String(doc["device_register"]["tenant_id"] | "");
+
+    String ssidTrim = ssid;
+    ssidTrim.trim();
+    if (ssidTrim.isEmpty()) {
+        Serial.println("[BLE] Provision payload missing wifi.ssid");
+        return;
+    }
+
+    queueProvisionedWifi(ssidTrim, password);
+    Serial.printf("[BLE] Provision payload accepted: ssid=%s, device=%s, cabinet=%s, tenant=%s\n", ssidTrim.c_str(),
+                  deviceId.c_str(), cabinetId.c_str(), tenantId.c_str());
+
+    if (gBleProvisionCharacteristic != nullptr) {
+        gBleProvisionCharacteristic->setValue("accepted");
+    }
+}
+
+class BleProvisionCharacteristicCallbacks final : public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic* characteristic) override {
+        const std::string value = characteristic->getValue();
+        if (value.empty()) {
+            Serial.println("[BLE] Empty provisioning payload");
+            return;
+        }
+        handleBleProvisionWrite(String(value.c_str()));
+    }
+};
+
+void startBleBroadcast() {
+    BLEDevice::init(gBleBroadcastName);
+    gBleServer = BLEDevice::createServer();
+    gBleProvisionService = gBleServer->createService(kBleProvisionServiceUuid);
+    gBleProvisionCharacteristic = gBleProvisionService->createCharacteristic(
+        kBleProvisionCharacteristicUuid, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE |
+                                             BLECharacteristic::PROPERTY_WRITE_NR);
+    gBleProvisionCharacteristic->setCallbacks(new BleProvisionCharacteristicCallbacks());
+    gBleProvisionCharacteristic->setValue("ready");
+    gBleProvisionService->start();
+
+    BLEAdvertising* advertising = BLEDevice::getAdvertising();
+    if (advertising == nullptr) {
+        Serial.println("[BLE] Failed to get BLE advertising handle");
+        return;
+    }
+
+    advertising->addServiceUUID(kBleProvisionServiceUuid);
+    advertising->setScanResponse(true);
+    advertising->setMinPreferred(0x06);
+    advertising->setMinPreferred(0x12);
+    BLEDevice::startAdvertising();
+    Serial.printf("[BLE] Advertising started as %s (svc=%s, chr=%s)\n", gBleBroadcastName, kBleProvisionServiceUuid,
+                  kBleProvisionCharacteristicUuid);
 }
 
 void logHeapStats(const char* tag) {
@@ -314,11 +495,15 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       <div class="row">
         <label>ID (2 digit)</label><input id="cabinetId2d" value="01" size="4" maxlength="2" />
         <label>Board</label><input id="layoutBoard" type="number" min="0" max="15" value="0" size="4" />
-        <label>Drawers</label><input id="drawerCount" type="number" min="1" max="48" value="24" size="5" />
+        <label>Drawers</label><input id="drawerCount" type="number" min="1" max="128" value="24" size="5" />
       </div>
       <div class="row">
         <label>Name</label><input id="cabinetName" value="Smart Cabinet" style="min-width:170px;" />
         <label>Location</label><input id="cabinetLocation" value="LAN Zone" style="min-width:170px;" />
+      </div>
+      <div class="row">
+        <label>Control Cards (RS485)</label><input id="controlCards" type="number" min="1" max="16" value="1" size="5" />
+        <label>Locks/Card</label><input id="locksPerCard" type="number" min="1" max="24" value="24" size="5" />
       </div>
       <div class="row">
         <button onclick="saveLayout()">Save Layout</button>
@@ -350,7 +535,7 @@ const char kIndexHtml[] PROGMEM = R"HTML(
           <option value="fixed">Fixed Drawer</option>
           <option value="reuse_last">Reuse Last Drawer</option>
         </select>
-        <label>Fixed Drawer</label><input id="fixedDrawerId" type="number" min="1" max="48" value="1" size="5" />
+        <label>Fixed Drawer</label><input id="fixedDrawerId" type="number" min="1" max="128" value="1" size="5" />
       </div>
       <div class="row">
         <label>WG Access</label>
@@ -360,13 +545,14 @@ const char kIndexHtml[] PROGMEM = R"HTML(
         </select>
         <label>Action</label>
         <select id="lockerIntent">
+          <option value="auto">AUTO (Default)</option>
           <option value="put">PUT</option>
           <option value="withdraw">WITHDRAW</option>
         </select>
       </div>
       <div class="row">
         <label>Allow Uses Type</label>
-        <input id="allowUsesType" type="number" min="1" max="48" value="1" size="5" />
+        <input id="allowUsesType" type="number" min="1" max="128" value="1" size="5" />
       </div>
       <div class="row">
         <label>QR+Password Uniqueness</label>
@@ -402,6 +588,7 @@ const char kIndexHtml[] PROGMEM = R"HTML(
         <label>Lock Addr</label><input id="lock" type="number" min="0" max="23" value="0" size="4" />
         <label>Action</label>
         <select id="openIntent">
+          <option value="auto">AUTO (Default)</option>
           <option value="put">PUT</option>
           <option value="withdraw">WITHDRAW</option>
         </select>
@@ -410,6 +597,7 @@ const char kIndexHtml[] PROGMEM = R"HTML(
       <div class="row">
         <button onclick="openLock()">Open Lock</button>
         <button class="secondary" onclick="scanBoards()">Scan 0-15</button>
+        <button class="secondary" onclick="autoDetectLayout()">Auto Detect + Apply</button>
       </div>
       <div class="row">
         <label>Detected board profile:</label>
@@ -515,6 +703,8 @@ function getLayoutFromForm() {
     cabinet_id_2d: (document.getElementById("cabinetId2d").value || "01").padStart(2, "0").slice(0,2),
     board: Number(document.getElementById("layoutBoard").value || "0"),
     drawer_count: Number(document.getElementById("drawerCount").value || "24"),
+    control_cards: Number(document.getElementById("controlCards").value || "1"),
+    locks_per_card: Number(document.getElementById("locksPerCard").value || "24"),
     cabinet_name: document.getElementById("cabinetName").value || "Smart Cabinet",
     cabinet_location: document.getElementById("cabinetLocation").value || "LAN"
   };
@@ -525,6 +715,8 @@ function applyLayoutToForm(cfg) {
   document.getElementById("cabinetId2d").value = cfg.cabinet_id_2d || "01";
   document.getElementById("layoutBoard").value = String(cfg.board ?? 0);
   document.getElementById("drawerCount").value = String(cfg.drawer_count ?? 24);
+  document.getElementById("controlCards").value = String(cfg.control_cards ?? 1);
+  document.getElementById("locksPerCard").value = String(cfg.locks_per_card ?? 24);
   document.getElementById("cabinetName").value = cfg.cabinet_name || "Smart Cabinet";
   document.getElementById("cabinetLocation").value = cfg.cabinet_location || "LAN";
   document.getElementById("board").value = String(cfg.board ?? 0);
@@ -551,6 +743,8 @@ async function saveLayout() {
   p.set("location", cfg.cabinet_location);
   p.set("drawers", String(cfg.drawer_count));
   p.set("board", String(cfg.board));
+  p.set("control_cards", String(cfg.control_cards));
+  p.set("locks_per_card", String(cfg.locks_per_card));
   const r = await api("/api/cabinet/meta?" + p.toString(), { method: "POST" });
   document.getElementById("queryOut").textContent = j(r);
   applyLayoutToForm(cfg);
@@ -587,11 +781,30 @@ async function loadMetaFromDevice() {
       cabinet_id_2d: d.meta.cabinet_id_2d,
       board: d.meta.board,
       drawer_count: d.meta.drawer_count,
+      control_cards: d.meta.control_cards,
+      locks_per_card: d.meta.locks_per_card,
       cabinet_name: d.meta.cabinet_name,
       cabinet_location: d.meta.cabinet_location
     });
     saveLayoutLocal(getLayoutFromForm());
   }
+}
+
+async function autoDetectLayout() {
+  const locksPerCard = Number(document.getElementById("locksPerCard").value || "24");
+  const p = new URLSearchParams();
+  p.set("locks_per_card", String(locksPerCard));
+  const d = await api("/api/rs485/auto-layout?" + p.toString(), { method: "POST" });
+  document.getElementById("queryOut").textContent = j(d);
+  if (!d || !d.ok) {
+    return;
+  }
+  await loadMetaFromDevice();
+  renderDrawers(Number(document.getElementById("drawerCount").value || "24"));
+  const cards = Number(d.detected_board_count || 0);
+  const maxLockers = Number(d.max_supported_lockers || 0);
+  document.getElementById("boardInfo").textContent =
+    "Auto layout applied | Detected cards: " + cards + " | Max lockers: " + maxLockers;
 }
 
 function applyOpsToForm(cfg) {
@@ -601,9 +814,9 @@ function applyOpsToForm(cfg) {
   document.getElementById("fixedDrawerId").value = String(cfg.fixed_drawer_id || 1);
   document.getElementById("identityMode").value = cfg.identity_mode || "phone_otp";
   document.getElementById("wgAccessMode").value = cfg.wg_access_mode || "free_card";
-  document.getElementById("lockerIntent").value = cfg.locker_intent || "put";
+  document.getElementById("lockerIntent").value = cfg.locker_intent || "auto";
   document.getElementById("allowUsesType").value = String(cfg.allow_uses_type || 1);
-  document.getElementById("openIntent").value = cfg.locker_intent || "put";
+  document.getElementById("openIntent").value = cfg.locker_intent || "auto";
 }
 
 async function saveOps() {
@@ -741,7 +954,7 @@ async function openLock() {
   const board = document.getElementById("board").value;
   const lock = document.getElementById("lock").value;
   const user = document.getElementById("openUser").value || "";
-  const intent = document.getElementById("openIntent").value || document.getElementById("lockerIntent").value || "put";
+  const intent = document.getElementById("openIntent").value || document.getElementById("lockerIntent").value || "auto";
   const p = new URLSearchParams();
   p.set("board", board);
   p.set("lock", lock);
@@ -786,7 +999,10 @@ async function scanBoards() {
       document.getElementById("board").value = String(ok.board);
       document.getElementById("qboard").value = String(ok.board);
       document.getElementById("layoutBoard").value = String(ok.board);
-      document.getElementById("boardInfo").textContent = "Board " + ok.board + " | " + (ok.version || "Version unknown");
+      const cnt = Number(d.detected_board_count || 0);
+      const maxL = Number(d.estimated_max_lockers || 0);
+      document.getElementById("boardInfo").textContent =
+        "Board " + ok.board + " | " + (ok.version || "Version unknown") + " | Detected cards: " + cnt + " | Max lockers: " + maxL;
     } else {
       document.getElementById("boardInfo").textContent = "No board reply in scan.";
     }
@@ -933,6 +1149,33 @@ void saveSyncDeviceKeyToNvs() {
         return;
     }
     prefs.putString("sync_key", String(gSyncState.deviceKey));
+    prefs.end();
+}
+
+void loadProvisionedWifiFromNvs() {
+    Preferences prefs;
+    if (!prefs.begin(kPrefsNs, false)) {
+        return;
+    }
+    const String ssid = prefs.getString("wifi_ssid", "");
+    const String password = prefs.getString("wifi_pass", "");
+    prefs.end();
+
+    if (!ssid.isEmpty()) {
+        copyStringTruncated(gProvisionedWifiSsid, sizeof(gProvisionedWifiSsid), ssid);
+        copyStringTruncated(gProvisionedWifiPassword, sizeof(gProvisionedWifiPassword), password);
+        Serial.printf("[WIFI] Loaded provisioned SSID from NVS: %s\n", gProvisionedWifiSsid);
+    }
+}
+
+void saveProvisionedWifiToNvs(const char* ssid, const char* password) {
+    Preferences prefs;
+    if (!prefs.begin(kPrefsNs, false)) {
+        Serial.println("[WIFI] Failed to open NVS for provisioned Wi-Fi save");
+        return;
+    }
+    prefs.putString("wifi_ssid", String(ssid == nullptr ? "" : ssid));
+    prefs.putString("wifi_pass", String(password == nullptr ? "" : password));
     prefs.end();
 }
 
@@ -1234,7 +1477,7 @@ bool applyConfigFromVpsJson(const String& body, String& errorOut) {
         }
     }
 
-    (void)gPolicyStore.ensureDefaultDrawerMappings(gCabinetMeta.drawerCount, gCabinetMeta.boardAddr);
+    (void)applyDefaultDrawerMappings(gCabinetMeta.drawerCount);
     if (!gPolicyStore.setLicense(licenseState, licenseValidTo) || !gPolicyStore.setSyncMeta(remoteVersion, nowSec)) {
         errorOut = "config_finalize_failed";
         return false;
@@ -1444,13 +1687,16 @@ bool isValidWgAccessMode(const String& v) {
 }
 
 bool isValidLockerIntent(const String& v) {
-    return v == "put" || v == "withdraw";
+    return v == "auto" || v == "put" || v == "withdraw";
 }
 
 String normalizeLockerIntent(const String& raw) {
     String intent = raw;
     intent.trim();
     intent.toLowerCase();
+    if (intent == "auto") {
+        return "auto";
+    }
     if (intent == "put" || intent == "deposit") {
         return "put";
     }
@@ -1460,13 +1706,95 @@ String normalizeLockerIntent(const String& raw) {
     return "";
 }
 
+uint8_t effectiveLocksPerCard() {
+    if (gCabinetMeta.locksPerCard < 1) {
+        return 1;
+    }
+    return gCabinetMeta.locksPerCard > kMaxLocksPerCard ? kMaxLocksPerCard : gCabinetMeta.locksPerCard;
+}
+
+uint8_t effectiveControlCards() {
+    if (gCabinetMeta.controlCards < 1) {
+        return 1;
+    }
+    return gCabinetMeta.controlCards > kMaxBoards ? kMaxBoards : gCabinetMeta.controlCards;
+}
+
+uint16_t configuredMaxLockers() {
+    return static_cast<uint16_t>(effectiveControlCards()) * static_cast<uint16_t>(effectiveLocksPerCard());
+}
+
+uint16_t supportedMaxLockers() {
+    const uint16_t maxByConfig = configuredMaxLockers();
+    const uint16_t maxByStore = LocalPolicyStore::kMaxDrawers;
+    return maxByConfig > maxByStore ? maxByStore : maxByConfig;
+}
+
+void clampDrawerCountToSupportedRange() {
+    const uint16_t maxLockers = supportedMaxLockers();
+    if (gCabinetMeta.drawerCount < 1) {
+        gCabinetMeta.drawerCount = 1;
+        return;
+    }
+    if (gCabinetMeta.drawerCount > maxLockers) {
+        gCabinetMeta.drawerCount = static_cast<uint8_t>(maxLockers);
+    }
+}
+
+bool deriveBoardLockFromDrawerId(uint16_t drawerId, uint8_t& board, uint8_t& lockAddr) {
+    if (drawerId == 0) {
+        return false;
+    }
+    const uint8_t locksPerCard = effectiveLocksPerCard();
+    if (locksPerCard == 0) {
+        return false;
+    }
+
+    const uint16_t boardSlot = static_cast<uint16_t>((drawerId - 1U) / locksPerCard);
+    lockAddr = static_cast<uint8_t>((drawerId - 1U) % locksPerCard);
+
+    if (gDetectedBoardCount > 0) {
+        if (boardSlot >= gDetectedBoardCount) {
+            return false;
+        }
+        board = gDetectedBoards[boardSlot];
+        return true;
+    }
+
+    const uint16_t computed = static_cast<uint16_t>(gCabinetMeta.boardAddr) + boardSlot;
+    if (computed >= kMaxBoards) {
+        return false;
+    }
+    board = static_cast<uint8_t>(computed);
+    return true;
+}
+
+bool applyDefaultDrawerMappings(uint16_t drawerCount) {
+    if (drawerCount == 0) {
+        return true;
+    }
+    bool ok = true;
+    for (uint16_t drawerId = 1; drawerId <= drawerCount; ++drawerId) {
+        uint8_t board = 0;
+        uint8_t lockAddr = 0;
+        if (!deriveBoardLockFromDrawerId(drawerId, board, lockAddr)) {
+            ok = false;
+            continue;
+        }
+        if (!gPolicyStore.upsertDrawer(drawerId, board, lockAddr)) {
+            ok = false;
+        }
+    }
+    return ok;
+}
+
 uint8_t effectiveAllowUsesType() {
-    uint8_t maxAllowed = gCabinetMeta.drawerCount;
+    uint8_t maxAllowed = static_cast<uint8_t>(gCabinetMeta.drawerCount);
     if (maxAllowed < 1) {
         maxAllowed = 1;
     }
-    if (maxAllowed > 48) {
-        maxAllowed = 48;
+    if (maxAllowed > LocalPolicyStore::kMaxDrawers) {
+        maxAllowed = LocalPolicyStore::kMaxDrawers;
     }
     if (gOpsMode.allowUsesType < 1) {
         return 1;
@@ -1563,6 +1891,17 @@ uint8_t countUserDrawerAssignments(const String& userRef) {
     uint8_t count = 0;
     collectUserAssignedDrawers(userRef, drawers, kMaxUserAssignments, count);
     return count;
+}
+
+String resolveEffectiveLockerIntent(const String& requestedIntent, const String& userRef) {
+    const String normalized = normalizeLockerIntent(requestedIntent);
+    if (normalized != "auto") {
+        return normalized;
+    }
+    if (userRef.isEmpty()) {
+        return "put";
+    }
+    return countUserDrawerAssignments(userRef) > 0 ? "withdraw" : "put";
 }
 
 bool hasUserDrawerAssignment(const String& userRef, uint16_t drawerId) {
@@ -1667,9 +2006,7 @@ bool resolveDrawerRouteById(uint16_t drawerId, uint8_t& board, uint8_t& lockAddr
         return false;
     }
 
-    board = gCabinetMeta.boardAddr;
-    lockAddr = static_cast<uint8_t>((drawerId - 1U) % 24U);
-    return true;
+    return deriveBoardLockFromDrawerId(drawerId, board, lockAddr);
 }
 
 uint16_t chooseDrawerIdForFreeCardFlow(const String& userRef, const String& lockerIntent) {
@@ -1724,6 +2061,8 @@ void saveCabinetMetaToNvs() {
     gPrefs.putString("cab_loc", String(gCabinetMeta.location));
     gPrefs.putUChar("cab_draw", gCabinetMeta.drawerCount);
     gPrefs.putUChar("cab_board", gCabinetMeta.boardAddr);
+    gPrefs.putUChar("cab_cards", gCabinetMeta.controlCards);
+    gPrefs.putUChar("cab_lpb", gCabinetMeta.locksPerCard);
     gPrefs.end();
 }
 
@@ -1761,13 +2100,22 @@ void loadPersistedSettings() {
         copyStringToBuf(gCabinetMeta.location, sizeof(gCabinetMeta.location), cabLoc);
     }
     const uint8_t drawerCount = gPrefs.getUChar("cab_draw", gCabinetMeta.drawerCount);
-    if (drawerCount >= 1 && drawerCount <= 48) {
+    if (drawerCount >= 1 && drawerCount <= LocalPolicyStore::kMaxDrawers) {
         gCabinetMeta.drawerCount = drawerCount;
     }
     const uint8_t board = gPrefs.getUChar("cab_board", gCabinetMeta.boardAddr);
     if (board < kMaxBoards) {
         gCabinetMeta.boardAddr = board;
     }
+    const uint8_t controlCards = gPrefs.getUChar("cab_cards", gCabinetMeta.controlCards);
+    if (controlCards >= 1 && controlCards <= kMaxBoards) {
+        gCabinetMeta.controlCards = controlCards;
+    }
+    const uint8_t locksPerCard = gPrefs.getUChar("cab_lpb", gCabinetMeta.locksPerCard);
+    if (locksPerCard >= 1 && locksPerCard <= kMaxLocksPerCard) {
+        gCabinetMeta.locksPerCard = locksPerCard;
+    }
+    clampDrawerCountToSupportedRange();
 
     const String method = gPrefs.getString("ops_m", "");
     if (isValidOpsMethod(method)) {
@@ -1778,7 +2126,7 @@ void loadPersistedSettings() {
         copyStringToBuf(gOpsMode.drawerStrategy, sizeof(gOpsMode.drawerStrategy), strategy);
     }
     const uint8_t fixedDrawer = gPrefs.getUChar("ops_f", gOpsMode.fixedDrawerId);
-    if (fixedDrawer >= 1 && fixedDrawer <= 48) {
+    if (fixedDrawer >= 1 && fixedDrawer <= LocalPolicyStore::kMaxDrawers) {
         gOpsMode.fixedDrawerId = fixedDrawer;
     }
     const String identityMode = gPrefs.getString("ops_i", "");
@@ -1794,7 +2142,7 @@ void loadPersistedSettings() {
         copyStringToBuf(gOpsMode.lockerIntent, sizeof(gOpsMode.lockerIntent), lockerIntent);
     }
     const uint8_t allowUsesType = gPrefs.getUChar("ops_u", gOpsMode.allowUsesType);
-    if (allowUsesType >= 1 && allowUsesType <= 48) {
+    if (allowUsesType >= 1 && allowUsesType <= LocalPolicyStore::kMaxDrawers) {
         gOpsMode.allowUsesType = allowUsesType;
     }
     gOpsMode.allowUsesType = effectiveAllowUsesType();
@@ -1965,7 +2313,7 @@ void processWiegandRuleDecision(const WiegandEvent& e) {
     }
 
     rememberDecisionFingerprint(e);
-    String lockerIntent = normalizeLockerIntent(String(gOpsMode.lockerIntent));
+    String lockerIntent = resolveEffectiveLockerIntent(String(gOpsMode.lockerIntent), e.cardId);
     if (!isValidLockerIntent(lockerIntent)) {
         lockerIntent = "put";
     }
@@ -2235,6 +2583,8 @@ void handleServiceWorker() {
 
 void handleHealth() {
     const String ip = WiFi.isConnected() ? WiFi.localIP().toString() : WiFi.softAPIP().toString();
+    const uint16_t maxLockers = supportedMaxLockers();
+    const uint16_t configuredMax = configuredMaxLockers();
     String j = "{";
     j += "\"ok\":true,";
     j += "\"wifi_connected\":" + String(WiFi.isConnected() ? "true" : "false") + ",";
@@ -2245,6 +2595,12 @@ void handleHealth() {
     j += "\"cabinet_location\":\"" + jsonEscape(String(gCabinetMeta.location)) + "\",";
     j += "\"drawer_count\":" + String(gCabinetMeta.drawerCount) + ",";
     j += "\"board\":" + String(gCabinetMeta.boardAddr) + ",";
+    j += "\"control_cards\":" + String(gCabinetMeta.controlCards) + ",";
+    j += "\"locks_per_card\":" + String(gCabinetMeta.locksPerCard) + ",";
+    j += "\"configured_max_lockers\":" + String(configuredMax) + ",";
+    j += "\"max_supported_lockers\":" + String(maxLockers) + ",";
+    j += "\"detected_board_count\":" + String(gDetectedBoardCount) + ",";
+    j += "\"detected_scan_ms\":" + String(gDetectedBoardScanMs) + ",";
     j += "\"ops_method\":\"" + String(gOpsMode.method) + "\",";
     j += "\"ops_strategy\":\"" + String(gOpsMode.drawerStrategy) + "\",";
     j += "\"ops_fixed_drawer\":" + String(gOpsMode.fixedDrawerId) + ",";
@@ -2336,6 +2692,8 @@ void handleDebugPanic() {
 }
 
 void handleCabinetMeta() {
+    const uint16_t maxLockers = supportedMaxLockers();
+    const uint16_t configuredMax = configuredMaxLockers();
     String j = "{";
     j += "\"ok\":true,";
     j += "\"meta\":{";
@@ -2343,7 +2701,13 @@ void handleCabinetMeta() {
     j += "\"cabinet_name\":\"" + jsonEscape(String(gCabinetMeta.name)) + "\",";
     j += "\"cabinet_location\":\"" + jsonEscape(String(gCabinetMeta.location)) + "\",";
     j += "\"drawer_count\":" + String(gCabinetMeta.drawerCount) + ",";
-    j += "\"board\":" + String(gCabinetMeta.boardAddr);
+    j += "\"board\":" + String(gCabinetMeta.boardAddr) + ",";
+    j += "\"control_cards\":" + String(gCabinetMeta.controlCards) + ",";
+    j += "\"locks_per_card\":" + String(gCabinetMeta.locksPerCard) + ",";
+    j += "\"configured_max_lockers\":" + String(configuredMax) + ",";
+    j += "\"max_supported_lockers\":" + String(maxLockers) + ",";
+    j += "\"detected_board_count\":" + String(gDetectedBoardCount) + ",";
+    j += "\"detected_scan_ms\":" + String(gDetectedBoardScanMs);
     j += "}}";
     gServer.send(200, "application/json", j);
 }
@@ -2382,7 +2746,8 @@ void handleOpsModeUpdate() {
     }
     if (gServer.hasArg("fixed_drawer_id")) {
         uint32_t fixedDrawer = 0;
-        if (!parseUIntArg(gServer.arg("fixed_drawer_id"), fixedDrawer) || fixedDrawer < 1 || fixedDrawer > 48) {
+        if (!parseUIntArg(gServer.arg("fixed_drawer_id"), fixedDrawer) || fixedDrawer < 1 ||
+            fixedDrawer > LocalPolicyStore::kMaxDrawers) {
             gServer.send(400, "application/json", "{\"ok\":false,\"error\":\"invalid_fixed_drawer_id\"}");
             return;
         }
@@ -2414,7 +2779,8 @@ void handleOpsModeUpdate() {
     }
     if (gServer.hasArg("allow_uses_type")) {
         uint32_t allowUsesType = 0;
-        if (!parseUIntArg(gServer.arg("allow_uses_type"), allowUsesType) || allowUsesType < 1 || allowUsesType > 48) {
+        if (!parseUIntArg(gServer.arg("allow_uses_type"), allowUsesType) || allowUsesType < 1 ||
+            allowUsesType > LocalPolicyStore::kMaxDrawers) {
             gServer.send(400, "application/json", "{\"ok\":false,\"error\":\"invalid_allow_uses_type\"}");
             return;
         }
@@ -2446,7 +2812,7 @@ void handleCabinetMetaUpdate() {
     }
     if (gServer.hasArg("drawers")) {
         uint32_t drawers = 0;
-        if (parseUIntArg(gServer.arg("drawers"), drawers) && drawers >= 1 && drawers <= 48) {
+        if (parseUIntArg(gServer.arg("drawers"), drawers) && drawers >= 1 && drawers <= LocalPolicyStore::kMaxDrawers) {
             gCabinetMeta.drawerCount = static_cast<uint8_t>(drawers);
         }
     }
@@ -2456,6 +2822,20 @@ void handleCabinetMetaUpdate() {
             gCabinetMeta.boardAddr = board;
         }
     }
+    if (gServer.hasArg("control_cards")) {
+        uint32_t controlCards = 0;
+        if (parseUIntArg(gServer.arg("control_cards"), controlCards) && controlCards >= 1 && controlCards <= kMaxBoards) {
+            gCabinetMeta.controlCards = static_cast<uint8_t>(controlCards);
+        }
+    }
+    if (gServer.hasArg("locks_per_card")) {
+        uint32_t locksPerCard = 0;
+        if (parseUIntArg(gServer.arg("locks_per_card"), locksPerCard) && locksPerCard >= 1 && locksPerCard <= kMaxLocksPerCard) {
+            gCabinetMeta.locksPerCard = static_cast<uint8_t>(locksPerCard);
+        }
+    }
+
+    clampDrawerCountToSupportedRange();
 
     const uint8_t prevAllowUsesType = gOpsMode.allowUsesType;
     gOpsMode.allowUsesType = effectiveAllowUsesType();
@@ -2464,7 +2844,7 @@ void handleCabinetMetaUpdate() {
     if (prevAllowUsesType != gOpsMode.allowUsesType) {
         saveOpsModeToNvs();
     }
-    (void)gPolicyStore.ensureDefaultDrawerMappings(gCabinetMeta.drawerCount, gCabinetMeta.boardAddr);
+    (void)applyDefaultDrawerMappings(gCabinetMeta.drawerCount);
     handleCabinetMeta();
 }
 
@@ -2501,12 +2881,12 @@ void handlePolicyReset() {
         gServer.send(500, "application/json", "{\"ok\":false,\"error\":\"policy_reset_failed\"}");
         return;
     }
-    gPolicyStore.ensureDefaultDrawerMappings(gCabinetMeta.drawerCount, gCabinetMeta.boardAddr);
+    applyDefaultDrawerMappings(gCabinetMeta.drawerCount);
     gServer.send(200, "application/json", gPolicyStore.toJson());
 }
 
 void handlePolicySeedDefaults() {
-    if (!gPolicyStore.ensureDefaultDrawerMappings(gCabinetMeta.drawerCount, gCabinetMeta.boardAddr)) {
+    if (!applyDefaultDrawerMappings(gCabinetMeta.drawerCount)) {
         gServer.send(500, "application/json", "{\"ok\":false,\"error\":\"seed_defaults_failed\"}");
         return;
     }
@@ -2664,14 +3044,14 @@ void handleRsOpen() {
         return;
     }
 
-    String lockerIntent =
-        gServer.hasArg("intent") ? normalizeLockerIntent(gServer.arg("intent")) : normalizeLockerIntent(String(gOpsMode.lockerIntent));
+    String userRef = resolveUserRef(gServer.hasArg("user") ? gServer.arg("user") : String(""));
+    const String userRawHex = resolveUserRawHex();
+    const String requestedIntent =
+        gServer.hasArg("intent") ? gServer.arg("intent") : String(gOpsMode.lockerIntent);
+    String lockerIntent = resolveEffectiveLockerIntent(requestedIntent, userRef);
     if (!isValidLockerIntent(lockerIntent)) {
         lockerIntent = "put";
     }
-
-    String userRef = resolveUserRef(gServer.hasArg("user") ? gServer.arg("user") : String(""));
-    const String userRawHex = resolveUserRawHex();
 
     uint16_t drawerId = static_cast<uint16_t>(lockAddr + 1U);
     const bool hasDrawerIdArg = gServer.hasArg("drawer_id");
@@ -2812,10 +3192,15 @@ void handleRsVersion() {
 void handleRsScan() {
     String j = "{\"ok\":true,\"scan_range\":\"0-15\",\"results\":[";
     bool first = true;
+    uint8_t detectedCount = 0;
+    uint8_t detectedBoards[kMaxBoards] = {0};
 
     for (uint8_t addr = 0; addr <= 15; ++addr) {
         DwReply reply;
         const bool ok = gRs485.queryVersion(addr, reply);
+        if (ok && detectedCount < kMaxBoards) {
+            detectedBoards[detectedCount++] = addr;
+        }
 
         if (!first) {
             j += ",";
@@ -2842,7 +3227,106 @@ void handleRsScan() {
         delay(20);
     }
 
-    j += "]}";
+    gDetectedBoardCount = detectedCount;
+    for (uint8_t i = 0; i < detectedCount; ++i) {
+        gDetectedBoards[i] = detectedBoards[i];
+    }
+    gDetectedBoardScanMs = millis();
+
+    const uint16_t estimatedMax = static_cast<uint16_t>(detectedCount) * static_cast<uint16_t>(effectiveLocksPerCard());
+    const uint16_t cappedEstimatedMax = estimatedMax > LocalPolicyStore::kMaxDrawers ? LocalPolicyStore::kMaxDrawers : estimatedMax;
+
+    j += "],\"detected_board_count\":" + String(detectedCount) + ",";
+    j += "\"detected_boards\":[";
+    for (uint8_t i = 0; i < detectedCount; ++i) {
+        if (i > 0) {
+            j += ",";
+        }
+        j += String(detectedBoards[i]);
+    }
+    j += "],";
+    j += "\"locks_per_card\":" + String(effectiveLocksPerCard()) + ",";
+    j += "\"estimated_max_lockers\":" + String(cappedEstimatedMax) + ",";
+    j += "\"max_supported_lockers\":" + String(supportedMaxLockers()) + "}";
+    gServer.send(200, "application/json", j);
+}
+
+void handleRsAutoLayout() {
+    if (gServer.hasArg("locks_per_card")) {
+        uint32_t locksPerCard = 0;
+        if (!parseUIntArg(gServer.arg("locks_per_card"), locksPerCard) || locksPerCard < 1 || locksPerCard > kMaxLocksPerCard) {
+            gServer.send(400, "application/json", "{\"ok\":false,\"error\":\"invalid_locks_per_card\"}");
+            return;
+        }
+        gCabinetMeta.locksPerCard = static_cast<uint8_t>(locksPerCard);
+    }
+
+    uint8_t detectedCount = 0;
+    uint8_t detectedBoards[kMaxBoards] = {0};
+    for (uint8_t addr = 0; addr < kMaxBoards; ++addr) {
+        DwReply reply;
+        if (gRs485.queryVersion(addr, reply) && detectedCount < kMaxBoards) {
+            detectedBoards[detectedCount++] = addr;
+        }
+        delay(20);
+    }
+
+    if (detectedCount == 0) {
+        gServer.send(409, "application/json", "{\"ok\":false,\"error\":\"no_board_detected\"}");
+        return;
+    }
+
+    gDetectedBoardCount = detectedCount;
+    for (uint8_t i = 0; i < detectedCount; ++i) {
+        gDetectedBoards[i] = detectedBoards[i];
+    }
+    gDetectedBoardScanMs = millis();
+
+    gCabinetMeta.controlCards = detectedCount;
+    gCabinetMeta.boardAddr = detectedBoards[0];
+
+    const uint8_t prevAllowUsesType = gOpsMode.allowUsesType;
+    const uint16_t maxLockers = supportedMaxLockers();
+    uint16_t targetDrawers = maxLockers;
+    if (gServer.hasArg("drawers")) {
+        uint32_t requested = 0;
+        if (!parseUIntArg(gServer.arg("drawers"), requested) || requested < 1 || requested > LocalPolicyStore::kMaxDrawers) {
+            gServer.send(400, "application/json", "{\"ok\":false,\"error\":\"invalid_drawers\"}");
+            return;
+        }
+        targetDrawers = static_cast<uint16_t>(requested > maxLockers ? maxLockers : requested);
+    }
+
+    gCabinetMeta.drawerCount = static_cast<uint8_t>(targetDrawers);
+    clampDrawerCountToSupportedRange();
+    gOpsMode.allowUsesType = effectiveAllowUsesType();
+
+    if (!applyDefaultDrawerMappings(gCabinetMeta.drawerCount)) {
+        gServer.send(500, "application/json", "{\"ok\":false,\"error\":\"auto_layout_failed\"}");
+        return;
+    }
+
+    saveCabinetMetaToNvs();
+    if (prevAllowUsesType != gOpsMode.allowUsesType) {
+        saveOpsModeToNvs();
+    }
+
+    String j = "{";
+    j += "\"ok\":true,";
+    j += "\"detected_board_count\":" + String(detectedCount) + ",";
+    j += "\"detected_boards\":[";
+    for (uint8_t i = 0; i < detectedCount; ++i) {
+        if (i > 0) {
+            j += ",";
+        }
+        j += String(detectedBoards[i]);
+    }
+    j += "],";
+    j += "\"locks_per_card\":" + String(effectiveLocksPerCard()) + ",";
+    j += "\"drawer_count\":" + String(gCabinetMeta.drawerCount) + ",";
+    j += "\"max_supported_lockers\":" + String(supportedMaxLockers()) + ",";
+    j += "\"board_base\":" + String(gCabinetMeta.boardAddr);
+    j += "}";
     gServer.send(200, "application/json", j);
 }
 
@@ -2926,9 +3410,22 @@ void connectNetwork() {
     WiFi.mode(WIFI_STA);
     WiFi.setHostname(DEVICE_HOSTNAME);
 
-    if (strlen(WIFI_SSID) > 0) {
-        Serial.printf("[NET] Connecting to SSID: %s\n", WIFI_SSID);
-        WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    const char* staSsid = nullptr;
+    const char* staPassword = "";
+    if (gProvisionedWifiSsid[0] != '\0') {
+        staSsid = gProvisionedWifiSsid;
+        staPassword = gProvisionedWifiPassword;
+        Serial.printf("[NET] Connecting with provisioned Wi-Fi SSID: %s\n", staSsid);
+    } else if (strlen(WIFI_SSID) > 0) {
+        staSsid = WIFI_SSID;
+        staPassword = WIFI_PASSWORD;
+        Serial.printf("[NET] Connecting with static Wi-Fi SSID: %s\n", staSsid);
+    } else {
+        Serial.println("[NET] No STA Wi-Fi configured.");
+    }
+
+    if (staSsid != nullptr && staSsid[0] != '\0') {
+        WiFi.begin(staSsid, staPassword);
 
         const unsigned long start = millis();
         while (WiFi.status() != WL_CONNECTED && (millis() - start) < 20000) {
@@ -2944,15 +3441,40 @@ void connectNetwork() {
     } else {
         Serial.println("[NET] STA not connected. Starting fallback AP mode.");
         WiFi.mode(WIFI_AP_STA);
-        const bool apOk = WiFi.softAP(AP_FALLBACK_SSID, AP_FALLBACK_PASSWORD);
-        Serial.printf("[NET] AP %s, SSID=%s, IP=%s\n", apOk ? "started" : "failed", AP_FALLBACK_SSID,
+        const bool apOk = WiFi.softAP(gApFallbackSsid, kApPassword);
+        Serial.printf("[NET] AP %s, SSID=%s, IP=%s\n", apOk ? "started" : "failed", gApFallbackSsid,
                       WiFi.softAPIP().toString().c_str());
     }
 
-    if (MDNS.begin(DEVICE_HOSTNAME)) {
+    static bool mdnsReady = false;
+    if (!mdnsReady && MDNS.begin(DEVICE_HOSTNAME)) {
         MDNS.addService("http", "tcp", 80);
         Serial.printf("[NET] mDNS ready: http://%s.local/\n", DEVICE_HOSTNAME);
+        mdnsReady = true;
     }
+}
+
+void processPendingWifiProvision() {
+    if (!gHasPendingWifiProvision) {
+        return;
+    }
+
+    char pendingSsid[kWifiSsidMaxLen + 1] = {0};
+    char pendingPassword[kWifiPasswordMaxLen + 1] = {0};
+    copyStringTruncated(pendingSsid, sizeof(pendingSsid), String(gPendingWifiSsid));
+    copyStringTruncated(pendingPassword, sizeof(pendingPassword), String(gPendingWifiPassword));
+    gHasPendingWifiProvision = false;
+
+    if (pendingSsid[0] == '\0') {
+        Serial.println("[BLE] Ignoring empty provisioned SSID");
+        return;
+    }
+
+    copyStringTruncated(gProvisionedWifiSsid, sizeof(gProvisionedWifiSsid), String(pendingSsid));
+    copyStringTruncated(gProvisionedWifiPassword, sizeof(gProvisionedWifiPassword), String(pendingPassword));
+    saveProvisionedWifiToNvs(gProvisionedWifiSsid, gProvisionedWifiPassword);
+    Serial.printf("[BLE] Applying provisioned Wi-Fi SSID: %s\n", gProvisionedWifiSsid);
+    connectNetwork();
 }
 
 void setupRoutes() {
@@ -2984,6 +3506,7 @@ void setupRoutes() {
     gServer.on("/api/rs485/ir-status", HTTP_GET, handleRsIr);
     gServer.on("/api/rs485/version", HTTP_GET, handleRsVersion);
     gServer.on("/api/rs485/scan", HTTP_GET, handleRsScan);
+    gServer.on("/api/rs485/auto-layout", HTTP_POST, handleRsAutoLayout);
 
     gServer.on("/api/tx/recent", HTTP_GET, handleTxRecent);
     gServer.on("/api/tx/download.csv", HTTP_GET, handleTxDownloadCsv);
@@ -3002,6 +3525,9 @@ void initCabinetMetaFromConfig() {
     snprintf(gCabinetMeta.location, sizeof(gCabinetMeta.location), "%s", CABINET_LOCATION);
     gCabinetMeta.drawerCount = DEFAULT_DRAWER_COUNT;
     gCabinetMeta.boardAddr = DEFAULT_BOARD_ADDR;
+    gCabinetMeta.controlCards = 1;
+    gCabinetMeta.locksPerCard = 24;
+    clampDrawerCountToSupportedRange();
 }
 
 void initOpsModeFromConfig() {
@@ -3036,11 +3562,12 @@ void setup() {
     initCabinetMetaFromConfig();
     initOpsModeFromConfig();
     loadPersistedSettings();
+    loadProvisionedWifiFromNvs();
     initSyncStateFromConfig();
     if (!gPolicyStore.begin(kPolicyPrefsNs)) {
         Serial.println("[POLICY] NVS load failed; using in-memory defaults.");
     }
-    if (!gPolicyStore.ensureDefaultDrawerMappings(gCabinetMeta.drawerCount, gCabinetMeta.boardAddr)) {
+    if (!applyDefaultDrawerMappings(gCabinetMeta.drawerCount)) {
         Serial.println("[POLICY] Failed to ensure default drawer mappings.");
     }
     if (!heapIntegrityOk("boot_after_policy", true)) {
@@ -3051,6 +3578,8 @@ void setup() {
     WiegandReader::instance().setEventCallback(onWiegandEvent);
     WiegandReader::instance().begin(WG_D0_PIN, WG_D1_PIN);
 
+    initDeviceIdentityFromMac();
+    startBleBroadcast();
     connectNetwork();
     setupRoutes();
     logHeapStats("boot_ready");
@@ -3071,6 +3600,7 @@ void loop() {
     static uint32_t sLastHeapCheckMs = 0;
     static uint32_t sLastSyncTickMs = 0;
     WiegandReader::instance().loop();
+    processPendingWifiProvision();
     gServer.handleClient();
     if ((millis() - sLastSyncTickMs) >= kSyncLoopTickMs) {
         sLastSyncTickMs = millis();

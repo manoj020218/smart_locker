@@ -24,6 +24,19 @@ export type BleProvisionResult = {
   bytesWritten: number;
 };
 
+export type BleDiscoveredDevice = {
+  id: string;
+  name: string;
+  rssi: number | null;
+};
+
+export type BleProbeResult = {
+  deviceId: string;
+  deviceName: string;
+  hasService: boolean;
+  hasCharacteristic: boolean;
+};
+
 export type BleProvisionPhase = "permissions" | "waiting_bluetooth" | "scanning" | "connecting" | "discovering" | "writing";
 
 const normalizeUuid = (value: string): string => value.trim().toLowerCase();
@@ -124,6 +137,50 @@ const matchesTarget = (device: Device, targetDeviceId?: string, targetNamePrefix
   return true;
 };
 
+const formatDeviceName = (device: Device): string => device.localName ?? device.name ?? "Unnamed";
+
+const pickPreferredDeviceRecord = (existing: Device, incoming: Device): Device => {
+  const existingName = formatDeviceName(existing);
+  const incomingName = formatDeviceName(incoming);
+  if (existingName === "Unnamed" && incomingName !== "Unnamed") return incoming;
+  const existingRssi = existing.rssi ?? -999;
+  const incomingRssi = incoming.rssi ?? -999;
+  return incomingRssi > existingRssi ? incoming : existing;
+};
+
+const scanForDevices = async (
+  manager: BleManager,
+  targetNamePrefix: string | undefined,
+  serviceUuid: string | undefined,
+  timeoutMs: number
+): Promise<Device[]> =>
+  new Promise((resolve, reject) => {
+    const seen = new Map<string, Device>();
+    let settled = false;
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      manager.stopDeviceScan();
+      resolve(Array.from(seen.values()));
+    }, timeoutMs);
+
+    manager.startDeviceScan(serviceUuid ? [serviceUuid] : null, { allowDuplicates: false }, (error, device) => {
+      if (settled) return;
+      if (error) {
+        settled = true;
+        clearTimeout(timeout);
+        manager.stopDeviceScan();
+        reject(new Error(error.message || "BLE scanning failed"));
+        return;
+      }
+      if (!device) return;
+      if (targetNamePrefix && !matchesTarget(device, undefined, targetNamePrefix)) return;
+
+      const existing = seen.get(device.id);
+      seen.set(device.id, existing ? pickPreferredDeviceRecord(existing, device) : device);
+    });
+  });
+
 const scanForTargetDevice = async (
   manager: BleManager,
   targetDeviceId: string | undefined,
@@ -167,6 +224,95 @@ export class BleProvisionClient {
 
   destroy(): void {
     this.manager.destroy();
+  }
+
+  async scanNearbyDevices(input: {
+    targetNamePrefix?: string;
+    serviceUuid?: string;
+    scanTimeoutMs?: number;
+    onProgress?: (phase: BleProvisionPhase, message: string) => void;
+  }): Promise<BleDiscoveredDevice[]> {
+    const serviceUuid = normalizeUuid(input.serviceUuid ?? "");
+    input.onProgress?.("permissions", "Requesting Bluetooth permissions...");
+    await requestBlePermissions();
+    input.onProgress?.("waiting_bluetooth", "Waiting for Bluetooth to turn on...");
+    await waitForPoweredOn(this.manager, DEFAULT_CONNECTION_TIMEOUT_MS);
+
+    input.onProgress?.("scanning", "Scanning nearby BLE devices...");
+    const devices = await scanForDevices(
+      this.manager,
+      input.targetNamePrefix?.trim() || undefined,
+      serviceUuid || undefined,
+      Math.max(1000, input.scanTimeoutMs ?? DEFAULT_SCAN_TIMEOUT_MS)
+    );
+    return devices
+      .map((device) => ({
+        id: device.id,
+        name: formatDeviceName(device),
+        rssi: device.rssi ?? null
+      }))
+      .sort((a, b) => {
+        if (a.name !== "Unnamed" && b.name === "Unnamed") return -1;
+        if (a.name === "Unnamed" && b.name !== "Unnamed") return 1;
+        return (b.rssi ?? -999) - (a.rssi ?? -999);
+      });
+  }
+
+  async probeDevice(input: {
+    targetDeviceId: string;
+    serviceUuid: string;
+    characteristicUuid: string;
+    connectTimeoutMs?: number;
+    onProgress?: (phase: BleProvisionPhase, message: string) => void;
+  }): Promise<BleProbeResult> {
+    const targetDeviceId = input.targetDeviceId.trim();
+    const serviceUuid = normalizeUuid(input.serviceUuid);
+    const characteristicUuid = normalizeUuid(input.characteristicUuid);
+    if (!targetDeviceId) {
+      throw new Error("targetDeviceId is required");
+    }
+    if (!serviceUuid || !characteristicUuid) {
+      throw new Error("serviceUuid and characteristicUuid are required");
+    }
+
+    input.onProgress?.("permissions", "Requesting Bluetooth permissions...");
+    await requestBlePermissions();
+    input.onProgress?.("waiting_bluetooth", "Waiting for Bluetooth to turn on...");
+    await waitForPoweredOn(this.manager, DEFAULT_CONNECTION_TIMEOUT_MS);
+
+    input.onProgress?.("connecting", "Connecting to selected BLE device...");
+    const connected = await this.manager.connectToDevice(targetDeviceId, {
+      timeout: Math.max(1000, input.connectTimeoutMs ?? DEFAULT_CONNECTION_TIMEOUT_MS)
+    });
+    try {
+      input.onProgress?.("discovering", "Discovering services and characteristics...");
+      const ready = await connected.discoverAllServicesAndCharacteristics();
+      const services = await ready.services();
+      const service = services.find((s) => normalizeUuid(s.uuid) === serviceUuid);
+      if (!service) {
+        return {
+          deviceId: ready.id,
+          deviceName: ready.localName ?? ready.name ?? ready.id,
+          hasService: false,
+          hasCharacteristic: false
+        };
+      }
+
+      const chars = await this.manager.characteristicsForDevice(ready.id, service.uuid);
+      const hasCharacteristic = chars.some((c) => normalizeUuid(c.uuid) === characteristicUuid);
+      return {
+        deviceId: ready.id,
+        deviceName: ready.localName ?? ready.name ?? ready.id,
+        hasService: true,
+        hasCharacteristic
+      };
+    } finally {
+      try {
+        await connected.cancelConnection();
+      } catch {
+        // Best-effort disconnect.
+      }
+    }
   }
 
   async provision(input: BleProvisionInput): Promise<BleProvisionResult> {

@@ -7,9 +7,20 @@ export const loadSession = async (): Promise<AppSession | null> => {
   const raw = await AsyncStorage.getItem(SESSION_KEY);
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw) as AppSession;
+    const parsed = JSON.parse(raw) as Partial<AppSession>;
     if (!parsed.token || !parsed.baseUrl) return null;
-    return parsed;
+    return {
+      baseUrl: parsed.baseUrl,
+      token: parsed.token,
+      identifier: parsed.identifier ?? "",
+      manufacturerId: parsed.manufacturerId ?? "",
+      tenantId: parsed.tenantId ?? "",
+      role: parsed.role ?? "",
+      permissions: Array.isArray(parsed.permissions) ? parsed.permissions : [],
+      cabinetIds: Array.isArray(parsed.cabinetIds) ? parsed.cabinetIds : [],
+      ownerId: parsed.ownerId ?? "",
+      displayName: parsed.displayName ?? ""
+    };
   } catch {
     return null;
   }

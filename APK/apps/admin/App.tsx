@@ -1,6 +1,6 @@
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, StatusBar as NativeStatusBar, StyleSheet, Text, View } from "react-native";
 import { BleProvisionScreen } from "./src/screens/BleProvisionScreen";
 import { CabinetAdminScreen } from "./src/screens/CabinetAdminScreen";
 import { DashboardScreen } from "./src/screens/DashboardScreen";
@@ -9,11 +9,13 @@ import { clearSession, loadSession, saveSession } from "./src/storage/session";
 import type { AppSession } from "./src/types/api";
 
 type AppTab = "dashboard" | "ble" | "cabinet_admin";
+const TAB_BAR_BOTTOM_PADDING = Platform.OS === "android" ? 12 : 20;
 
 export default function App(): React.JSX.Element {
   const [booting, setBooting] = useState(true);
   const [session, setSession] = useState<AppSession | null>(null);
   const [tab, setTab] = useState<AppTab>("dashboard");
+  const statusBarInset = Platform.OS === "android" ? (NativeStatusBar.currentHeight ?? 0) : 0;
 
   useEffect(() => {
     const bootstrap = async (): Promise<void> => {
@@ -36,6 +38,10 @@ export default function App(): React.JSX.Element {
     setTab("dashboard");
   };
 
+  const handleSessionInvalid = (): void => {
+    void handleLogout();
+  };
+
   if (booting) {
     return (
       <View style={styles.boot}>
@@ -48,7 +54,16 @@ export default function App(): React.JSX.Element {
     <View style={styles.root}>
       {session ? (
         <View style={styles.authRoot}>
-          <View style={styles.tabBar}>
+          <View style={[styles.screenArea, { paddingTop: statusBarInset }]}>
+            {tab === "dashboard" ? (
+              <DashboardScreen session={session} onLogout={handleLogout} onSessionInvalid={handleSessionInvalid} />
+            ) : tab === "ble" ? (
+              <BleProvisionScreen session={session} />
+            ) : (
+              <CabinetAdminScreen session={session} onSessionInvalid={handleSessionInvalid} />
+            )}
+          </View>
+          <View style={[styles.tabBar, { paddingBottom: TAB_BAR_BOTTOM_PADDING }]}>
             <Pressable style={[styles.tab, tab === "dashboard" && styles.tabActive]} onPress={() => setTab("dashboard")}>
               <Text style={[styles.tabText, tab === "dashboard" && styles.tabTextActive]}>Operations</Text>
             </Pressable>
@@ -59,13 +74,6 @@ export default function App(): React.JSX.Element {
               <Text style={[styles.tabText, tab === "cabinet_admin" && styles.tabTextActive]}>Cabinet Admin</Text>
             </Pressable>
           </View>
-          {tab === "dashboard" ? (
-            <DashboardScreen session={session} onLogout={handleLogout} />
-          ) : tab === "ble" ? (
-            <BleProvisionScreen session={session} />
-          ) : (
-            <CabinetAdminScreen session={session} />
-          )}
         </View>
       ) : (
         <LoginScreen onLogin={handleLogin} />
@@ -83,15 +91,17 @@ const styles = StyleSheet.create({
   authRoot: {
     flex: 1
   },
+  screenArea: {
+    flex: 1
+  },
   tabBar: {
     flexDirection: "row",
     gap: 8,
     paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 6,
+    paddingTop: 8,
     backgroundColor: "#0a101a",
-    borderBottomWidth: 1,
-    borderBottomColor: "#1c293c"
+    borderTopWidth: 1,
+    borderTopColor: "#1c293c"
   },
   tab: {
     borderRadius: 20,

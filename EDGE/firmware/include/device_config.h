@@ -95,7 +95,7 @@
 #endif
 
 #ifndef DEFAULT_LOCKER_INTENT
-#define DEFAULT_LOCKER_INTENT "put"
+#define DEFAULT_LOCKER_INTENT "auto"
 #endif
 
 #ifndef DEFAULT_ALLOW_USES_TYPE

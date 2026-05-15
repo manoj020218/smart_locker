@@ -79,7 +79,11 @@ export const buildPermissions = (role: AuthRole): string[] => {
         "cabinet.register",
         "cabinet.assign_owner",
         "owner.create",
-        "manufacturer.health.read"
+        "manufacturer.health.read",
+        "member.manage",
+        "rule.manage",
+        "drawer.manage",
+        "operation.read"
       ];
     case "owner":
       return [

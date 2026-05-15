@@ -46,6 +46,18 @@ const ownerCreateSchema = z.object({
   must_change_password: z.boolean().default(true)
 });
 
+const ownerUpdateSchema = z.object({
+  manufacturer_id: z.string().min(1).optional(),
+  display_name: z.string().min(2).optional(),
+  company_name: z.string().min(1).optional(),
+  email: z.string().email().optional(),
+  mobile: z.string().min(6).max(20).optional(),
+  password: z.string().min(8).optional(),
+  status: z.enum(["active", "inactive", "blocked"]).optional(),
+  cabinet_ids: z.array(z.string().min(1)).optional(),
+  must_change_password: z.boolean().optional()
+});
+
 const ownerAssignSchema = z.object({
   manufacturer_id: z.string().min(1).optional(),
   owner_user_id: z.string().min(1)
@@ -518,6 +530,135 @@ manufacturerRoutes.post(
   })
 );
 
+manufacturerRoutes.put(
+  "/owners/:ownerUserId",
+  asyncHandler(async (req, res) => {
+    const claims = (req as typeof req & { user: AuthJwtPayload }).user;
+    const ownerUserId = req.params.ownerUserId?.trim();
+    if (!ownerUserId) {
+      throw badRequest("ownerUserId path parameter is required");
+    }
+
+    const body = parseBody(ownerUpdateSchema, req.body);
+    const manufacturerId = resolveManufacturerIdFromClaims(claims, body.manufacturer_id);
+
+    const owner = await collections().authUsers.findOne<AuthUserDoc>({
+      user_id: ownerUserId,
+      role: "owner",
+      manufacturer_id: manufacturerId
+    });
+    if (!owner) {
+      throw notFound("Owner not found in manufacturer scope");
+    }
+
+    if (body.email) {
+      const emailLower = body.email.trim().toLowerCase();
+      const duplicate = await collections().authUsers.findOne<AuthUserDoc>({
+        email_lower: emailLower,
+        user_id: { $ne: ownerUserId }
+      });
+      if (duplicate) {
+        throw badRequest("Another user already exists with this email");
+      }
+    }
+
+    const cabinetIds = body.cabinet_ids ? Array.from(new Set(body.cabinet_ids.map((id) => id.trim()).filter((id) => id.length > 0))) : undefined;
+    if (cabinetIds && cabinetIds.length > 0) {
+      const assignedCount = await collections().cabinets.countDocuments({
+        manufacturer_id: manufacturerId,
+        cabinet_id: { $in: cabinetIds }
+      });
+      if (assignedCount !== cabinetIds.length) {
+        throw forbidden("One or more cabinet_ids are outside manufacturer scope");
+      }
+    }
+
+    const setDoc: Record<string, unknown> = { updated_at: new Date() };
+    if (body.display_name !== undefined || body.company_name !== undefined) {
+      setDoc.display_name = body.company_name?.trim() || body.display_name?.trim() || owner.display_name;
+    }
+    if (body.email !== undefined) {
+      setDoc.email = body.email.trim();
+      setDoc.email_lower = body.email.trim().toLowerCase();
+    }
+    if (body.mobile !== undefined) {
+      setDoc.mobile = body.mobile.trim();
+    }
+    if (body.status !== undefined) {
+      setDoc.status = body.status;
+    }
+    if (body.must_change_password !== undefined) {
+      setDoc.must_change_password = body.must_change_password;
+    }
+    if (cabinetIds !== undefined) {
+      setDoc.cabinet_ids = cabinetIds;
+    }
+    if (body.password) {
+      setDoc.password_hash = await hashPassword(body.password);
+      if (body.must_change_password === undefined) {
+        setDoc.must_change_password = false;
+      }
+    }
+
+    await collections().authUsers.updateOne({ user_id: ownerUserId }, { $set: setDoc });
+
+    if (cabinetIds !== undefined) {
+      await collections().cabinets.updateMany(
+        { manufacturer_id: manufacturerId, owner_id: ownerUserId, cabinet_id: { $nin: cabinetIds } },
+        { $set: { owner_id: "", updated_at: new Date() } }
+      );
+      if (cabinetIds.length > 0) {
+        await collections().cabinets.updateMany(
+          { manufacturer_id: manufacturerId, cabinet_id: { $in: cabinetIds } },
+          { $set: { owner_id: ownerUserId, updated_at: new Date() } }
+        );
+      }
+    }
+
+    res.json({
+      ok: true,
+      manufacturer_id: manufacturerId,
+      owner_user_id: ownerUserId,
+      assigned_cabinets: cabinetIds ?? owner.cabinet_ids ?? []
+    });
+  })
+);
+
+manufacturerRoutes.delete(
+  "/owners/:ownerUserId",
+  asyncHandler(async (req, res) => {
+    const claims = (req as typeof req & { user: AuthJwtPayload }).user;
+    const ownerUserId = req.params.ownerUserId?.trim();
+    if (!ownerUserId) {
+      throw badRequest("ownerUserId path parameter is required");
+    }
+
+    const query = parseQuery(manufacturerQuerySchema, req.query);
+    const manufacturerId = resolveManufacturerIdFromClaims(claims, query.manufacturer_id);
+
+    const owner = await collections().authUsers.findOne<AuthUserDoc>({
+      user_id: ownerUserId,
+      role: "owner",
+      manufacturer_id: manufacturerId
+    });
+    if (!owner) {
+      throw notFound("Owner not found in manufacturer scope");
+    }
+
+    await collections().authUsers.deleteOne({ user_id: ownerUserId });
+    await collections().cabinets.updateMany(
+      { manufacturer_id: manufacturerId, owner_id: ownerUserId },
+      { $set: { owner_id: "", updated_at: new Date() } }
+    );
+
+    res.json({
+      ok: true,
+      manufacturer_id: manufacturerId,
+      owner_user_id: ownerUserId
+    });
+  })
+);
+
 manufacturerRoutes.post(
   "/cabinets/:cabinetId/assign-owner",
   asyncHandler(async (req, res) => {
@@ -657,6 +798,49 @@ manufacturerRoutes.post(
       manufacturer_id: manufacturerId,
       tenant_id: tenantId,
       cabinet_id: body.cabinet_id
+    });
+  })
+);
+
+manufacturerRoutes.delete(
+  "/cabinets/:cabinetId",
+  asyncHandler(async (req, res) => {
+    const claims = (req as typeof req & { user: AuthJwtPayload }).user;
+    const cabinetId = req.params.cabinetId?.trim();
+    if (!cabinetId) {
+      throw badRequest("cabinetId path parameter is required");
+    }
+
+    const query = parseQuery(manufacturerQuerySchema, req.query);
+    const manufacturerId = resolveManufacturerIdFromClaims(claims, query.manufacturer_id);
+
+    const cabinet = await collections().cabinets.findOne<{ cabinet_id: string }>({
+      cabinet_id: cabinetId,
+      manufacturer_id: manufacturerId
+    });
+    if (!cabinet) {
+      throw notFound("Cabinet not found in manufacturer scope");
+    }
+
+    await collections().cabinets.deleteOne({ cabinet_id: cabinetId, manufacturer_id: manufacturerId });
+    await collections().authUsers.updateMany(
+      { manufacturer_id: manufacturerId, role: "owner" },
+      {
+        $pull: { cabinet_ids: cabinetId },
+        $set: { updated_at: new Date() }
+      }
+    );
+
+    await Promise.all([
+      collections().users.deleteMany({ cabinet_id: cabinetId }),
+      collections().rules.deleteMany({ cabinet_id: cabinetId }),
+      collections().drawerMappings.deleteMany({ cabinet_id: cabinetId })
+    ]);
+
+    res.json({
+      ok: true,
+      manufacturer_id: manufacturerId,
+      cabinet_id: cabinetId
     });
   })
 );

@@ -42,7 +42,7 @@ public:
     // Sized to keep NVS blob updates reliable on ESP32-C3 default NVS partition.
     static constexpr uint8_t kMaxUsers = 16;
     static constexpr uint8_t kMaxRules = 24;
-    static constexpr uint8_t kMaxDrawers = 48;
+    static constexpr uint8_t kMaxDrawers = 128;
 
     bool begin(const char* nvsNamespace);
     bool load();

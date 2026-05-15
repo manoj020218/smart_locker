@@ -128,7 +128,7 @@ export const requireRoles =
     });
   };
 
-export const requireAdminJwt = requireRoles(["admin", "cabinet_admin", "super_admin"]);
+export const requireAdminJwt = requireRoles(["admin", "cabinet_admin", "super_admin", "manufacturer"]);
 
 const safeEqualHex = (aHex: string, bHex: string): boolean => {
   const a = Buffer.from(aHex, "hex");

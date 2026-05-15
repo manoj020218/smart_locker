@@ -19,7 +19,8 @@ export type AuthLoginResponse = {
   expires_in_sec: number;
   profile: AuthProfile;
   dashboard_route: string;
-  permissions: string[];
+  permissions?: string[];
+  allowed_permissions?: string[];
 };
 
 export type ApiErrorResponse = {
@@ -97,12 +98,27 @@ export type CreateOwnerPayload = {
   must_change_password?: boolean;
 };
 
+export type UpdateOwnerPayload = {
+  display_name?: string;
+  email?: string;
+  mobile?: string;
+  password?: string;
+  status?: "active" | "inactive" | "blocked";
+  cabinet_ids?: string[];
+  must_change_password?: boolean;
+};
+
 export type AppSession = {
   baseUrl: string;
   token: string;
   identifier: string;
   manufacturerId: string;
   tenantId: string;
+  role?: string;
+  permissions?: string[];
+  cabinetIds?: string[];
+  ownerId?: string;
+  displayName?: string;
 };
 
 export type AdminUser = {
