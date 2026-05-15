@@ -60,6 +60,9 @@ EDGE/firmware/managed_components/
 
 # APK (React Native / Android / iOS)
 APK/apps/**/node_modules/
+APK/apps/**/.expo/
+APK/apps/**/.gradle-local/
+APK/apps/**/android/
 APK/apps/**/android/.gradle/
 APK/apps/**/android/build/
 APK/apps/**/android/app/build/
@@ -73,5 +76,10 @@ APK/apps/**/ios/DerivedData/
 VPS/api/node_modules/
 VPS/api/build/
 VPS/api/dist/
+VPS/deploy/relay-no-docker/
+VPS/deploy/tmp_vps_deploy_smartlocker.sh
 EDGE/firmware/.pio/
 EDGE/firmware/include/local_config.h
+EDGE/firmware/coredump_head.bin
+EDGE/firmware/ptable.bin
+apkprompt.txt
